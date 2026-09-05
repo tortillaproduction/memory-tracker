@@ -1,5 +1,8 @@
-// NOTE: 現時点ではAPIクライアント（src/api）が未生成のためダミーデータを使用。
-// バックエンドのOpenAPI定義が整い次第、orval等でsrc/apiを自動生成し置き換える想定。
+import { useAuth } from '../hooks/useAuth'
+
+// NOTE: サイト一覧・ストリークはまだ /api/sites 等のAPIが無いためダミーデータを使用。
+// バックエンド側のエンドポイントが揃い次第、useAuthと同様にReact Queryのフックへ置き換える想定。
+
 
 type SiteStatus = {
   id: string
@@ -23,10 +26,21 @@ function statusColor(hoursSince: number, interval: number): string {
 }
 
 export default function Dashboard() {
+  const { user, logout } = useAuth()
   const userStreak = 12 // TODO: APIから取得
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
+      <div className="flex items-center justify-between mb-4">
+        <p>Logged in as {user?.name}</p>
+        <button
+          onClick={() => logout()}
+          className="text-sm text-slate-400 hover:text-slate-600"
+        >
+          Logout
+        </button>
+      </div>
+
       <header className="mb-8 text-center">
         <h1 className="text-2xl font-bold text-slate-800">Study Tracker</h1>
         <p className="mt-2 text-4xl">🔥 {userStreak}日連続</p>

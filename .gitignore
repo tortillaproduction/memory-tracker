@@ -1,4 +1,13 @@
-node_modules/
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
 
+# Backend
+backend/bin/
+
+# Env
 .env
-.env.example
+
+# OS
+.DS_Store
