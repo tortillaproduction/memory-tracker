@@ -30,6 +30,7 @@ func NewUser(id ID, googleID, email, name string) *User {
 }
 
 func (u *User) ID() ID           { return u.id }
+func (u *User) GoogleID() string { return u.googleID }
 func (u *User) Email() string    { return u.email }
 func (u *User) Name() string     { return u.name }
 func (u *User) Plan() plan.Plan  { return u.plan }

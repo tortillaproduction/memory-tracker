@@ -27,19 +27,60 @@ func (r *siteRepository) Save(ctx context.Context, s *site.Site) error {
 			url = EXCLUDED.url,
 			interval_hours = EXCLUDED.interval_hours,
 			is_archived = EXCLUDED.is_archived
-	`, s.ID(), s.UserID(), s.URL(), s.URL(), s.IntervalHours(), s.IsArchived())
-	// NOTE: 実際にはgetter経由でNameも渡す必要あり。sqlcでの自動生成に置き換え推奨。
+	`, s.ID(), s.UserID(), s.Name(), s.URL(), s.URL(), s.IntervalHours(), s.IsArchived())
 	return err
 }
 
 func (r *siteRepository) FindByID(ctx context.Context, id site.ID) (*site.Site, error) {
-	// TODO: sqlcで型安全なクエリに置き換える
-	return nil, nil
+	row := r.db.QueryRowContext(ctx, `
+		SELECT id, user_id, name, url, interval_hours, is_archived
+		FROM sites WHERE id = $1
+	`, id)
+	return scanSite(row)
 }
 
 func (r *siteRepository) FindAllByUserID(ctx context.Context, userID user.ID) ([]*site.Site, error) {
-	// TODO: 実装
-	return nil, nil
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, user_id, name, url, interval_hours, is_archived
+		FROM sites WHERE user_id = $1 AND is_archived = false
+		ORDER BY created_at DESC
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var sites []*site.Site
+	for rows.Next() {
+		s, err := scanSite(rows)
+		if err != nil {
+			return nil, err
+		}
+		sites = append(sites, s)
+	}
+
+	return sites, rows.Err()
+}
+
+// scannerはsql.Rowとsql.Rowsの両方に対応させるための最小インターフェース
+type scanner interface {
+	Scan(dest ...any) error
+}
+
+func scanSite(row scanner) (*site.Site, error) {
+	var id, userID, name, url string
+	var intervalHours int
+	var isArchived bool
+
+	if err := row.Scan(&id, &userID, &name, &url, &intervalHours, &isArchived); err != nil {
+		return nil, err
+	}
+
+	s := site.NewSite(site.ID(id), user.ID(userID), name, url, intervalHours)
+	if isArchived {
+		s.Archive()
+	}
+	return s, nil
 }
 
 func (r *siteRepository) CountByUserID(ctx context.Context, userID user.ID) (int, error) {

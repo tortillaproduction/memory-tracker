@@ -7,6 +7,7 @@ import (
 
 	"github.com/tortillaproduction/study-tracker/internal/domain/site"
 	"github.com/tortillaproduction/study-tracker/internal/domain/user"
+	"github.com/tortillaproduction/study-tracker/internal/interface/http/middleware"
 	"github.com/tortillaproduction/study-tracker/internal/usecase/checkin_site"
 )
 
@@ -37,12 +38,8 @@ func (h *CheckInHandler) CheckInAndRedirect(w http.ResponseWriter, r *http.Reque
 
 // userIDFromContext は認証ミドルウェアがセットしたユーザーIDを取り出す想定のヘルパー。
 func userIDFromContext(ctx context.Context) user.ID {
-	if v, ok := ctx.Value(userIDContextKey).(user.ID); ok {
+	if v, ok := ctx.Value(middleware.UserIDContextKey).(user.ID); ok {
 		return v
 	}
 	return ""
 }
-
-type contextKey string
-
-const userIDContextKey contextKey = "userID"

@@ -3,6 +3,7 @@ package postgres
 import (
 	"github.com/tortillaproduction/study-tracker/internal/domain/checkin"
 	"github.com/tortillaproduction/study-tracker/internal/domain/site"
+	"github.com/tortillaproduction/study-tracker/internal/domain/user"
 
 	"github.com/oklog/ulid/v2"
 )
@@ -21,4 +22,8 @@ func (g *ULIDGenerator) NewSiteID() site.ID {
 
 func (g *ULIDGenerator) NewCheckInID() checkin.ID {
 	return checkin.ID(ulid.Make().String())
+}
+
+func (g *ULIDGenerator) NewUserID() user.ID {
+	return user.ID(ulid.Make().String())
 }

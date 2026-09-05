@@ -35,11 +35,12 @@ func NewSite(id ID, userID user.ID, name, url string, intervalHours int) *Site {
 	}
 }
 
-func (s *Site) ID() ID                { return s.id }
-func (s *Site) UserID() user.ID       { return s.userID }
-func (s *Site) URL() string           { return s.url }
-func (s *Site) IntervalHours() int    { return s.intervalHours }
-func (s *Site) IsArchived() bool      { return s.isArchived }
+func (s *Site) ID() ID             { return s.id }
+func (s *Site) UserID() user.ID    { return s.userID }
+func (s *Site) Name() string       { return s.name }
+func (s *Site) URL() string        { return s.url }
+func (s *Site) IntervalHours() int { return s.intervalHours }
+func (s *Site) IsArchived() bool   { return s.isArchived }
 
 func (s *Site) Archive() { s.isArchived = true }
 

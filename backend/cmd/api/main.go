@@ -8,8 +8,11 @@ import (
 
 	_ "github.com/lib/pq"
 
+	infraauth "github.com/tortillaproduction/study-tracker/internal/infrastructure/auth"
 	pg "github.com/tortillaproduction/study-tracker/internal/infrastructure/persistence/postgres"
 	httpinterface "github.com/tortillaproduction/study-tracker/internal/interface/http"
+	"github.com/tortillaproduction/study-tracker/internal/interface/http/handler"
+	usecaseauth "github.com/tortillaproduction/study-tracker/internal/usecase/auth"
 	"github.com/tortillaproduction/study-tracker/internal/usecase/checkin_site"
 	"github.com/tortillaproduction/study-tracker/internal/usecase/register_site"
 )
@@ -25,18 +28,33 @@ func main() {
 	}
 	defer db.Close()
 
+	frontendURL := getEnvOrDefault("FRONTEND_URL", "http://localhost:5173")
+
 	// --- 依存性の組み立て（手動DI） ---
 	userRepo := pg.NewUserRepository(db)
 	siteRepo := pg.NewSiteRepository(db)
 	checkinRepo := pg.NewCheckInRepository(db)
 	idGen := pg.NewULIDGenerator()
 
+	sessionStore := infraauth.NewSessionStore(db)
+	googleClient := infraauth.NewGoogleOAuthClient(
+		os.Getenv("GOOGLE_CLIENT_ID"),
+		os.Getenv("GOOGLE_CLIENT_SECRET"),
+		os.Getenv("GOOGLE_REDIRECT_URL"),
+	)
+
 	registerSiteUC := register_site.NewUsecase(userRepo, siteRepo, checkinRepo, idGen)
 	checkinSiteUC := checkin_site.NewUsecase(siteRepo, checkinRepo, idGen)
+	googleLoginUC := usecaseauth.NewUsecase(userRepo, idGen)
+
+	authHandler := handler.NewAuthHandler(googleClient, sessionStore, googleLoginUC, userRepo, frontendURL, logger)
 
 	router := httpinterface.NewRouter(httpinterface.Dependencies{
 		RegisterSiteUsecase: registerSiteUC,
 		CheckinSiteUsecase:  checkinSiteUC,
+		AuthHandler:         authHandler,
+		SessionStore:        sessionStore,
+		FrontendURL:         frontendURL,
 		Logger:              logger,
 	})
 
@@ -46,4 +64,11 @@ func main() {
 		logger.Error("server stopped", "error", err)
 		os.Exit(1)
 	}
+}
+
+func getEnvOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }

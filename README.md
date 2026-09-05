@@ -43,6 +43,53 @@ migrate -path ./backend/migrations \
   up
 ```
 
+## Google OAuthの設定
+
+1. [Google Cloud Console](https://console.cloud.google.com/) でプロジェクトを作成
+2. 「APIとサービス」→「認証情報」から OAuth 2.0 クライアントID を作成（アプリケーションの種類: ウェブアプリケーション）
+3. 承認済みのリダイレクトURIに `http://localhost:8080/api/auth/google/callback` を追加
+4. 発行された クライアントID・クライアントシークレット を `.env` の `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` に設定
+5. `docker compose up` で再起動すればログインボタンから一連の流れが動作します
+
+### 認証フローの流れ
+
+```
+[フロント] Googleでログインボタン
+    ↓ window.location.href
+[バックエンド] GET /api/auth/google/login
+    → state生成 → Cookie保存 → Googleの同意画面へリダイレクト
+    ↓
+[Google] ユーザーが許可
+    ↓
+[バックエンド] GET /api/auth/google/callback?code=...&state=...
+    → state検証 → 認可コードをユーザー情報に交換
+    → ユーザーをDBで検索/新規作成（usecase/auth）
+    → セッション発行（sessionsテーブル）→ Cookie(session_id)をセット
+    → フロントエンドへリダイレクト
+    ↓
+[フロント] 起動時に GET /api/auth/me を呼び、Cookie付きで認証確認
+    → 200ならダッシュボード表示、401ならログイン画面表示
+```
+
+## トラブルシューティング
+
+**フロントエンドの `npm install` で ERESOLVE エラーが出る場合**
+
+`package-lock.json` をコミットせずに `npm install` を実行すると、環境やnpmキャッシュの状態によって解決されるパッケージバージョンがぶれ、依存関係の競合が起きることがあります。このリポジトリでは `package-lock.json` を同梱し、Dockerfile側も `npm ci`（lockfileを厳密に再現するインストール）を使う構成にしているため、通常は発生しません。
+
+もし発生した場合は、キャッシュを使わず再ビルドしてください。
+
+```bash
+docker compose build --no-cache frontend
+```
+
+それでも解決しない場合は、ローカルの `frontend/node_modules` や `frontend/package-lock.json` が古い状態で残っていないか確認し、削除してから再度試してください。
+
+```bash
+rm -rf frontend/node_modules frontend/package-lock.json
+docker compose build --no-cache frontend
+```
+
 ## テスト（バックエンド）
 
 ```bash
@@ -54,11 +101,13 @@ make test
 
 - [x] ドメインモデル設計（User / Plan / Site / CheckIn）
 - [x] プロジェクト雛形・ディレクトリ構成
-- [ ] Google OAuth実装
-- [ ] Cookieセッション実装
-- [ ] サイト登録API（登録=初回チェックイン）
-- [ ] 経由リンク方式のチェックインAPI（`/go/:siteId`）
-- [ ] ストリーク計算API・ダッシュボード表示
+- [x] Google OAuth実装（標準ライブラリのみで実装、`golang.org/x/oauth2`は不使用）
+- [x] Cookieセッション実装（Postgresの`sessions`テーブルで管理、即時失効可能）
+- [x] 認証ミドルウェア（`RequireAuth`）とフロントエンドの認証状態分岐（ログイン画面⇔ダッシュボード）
+- [x] サイト登録API（登録=初回チェックイン）
+- [x] 経由リンク方式のチェックインAPI（`/go/:siteId`、認証必須）
+- [ ] サイト一覧取得API（`GET /api/sites`）とフロントの実データ反映（現状ダミーデータ）
+- [ ] ストリーク計算API・ダッシュボード表示（計算ロジック自体は`domain/checkin/streak.go`に実装済み）
 - [ ] メール通知バッチ（未訪問サイトの検出）
 - [ ] LINE通知（UIはトグル用意、実装完了までグレーアウト）
 - [ ] Stripe連携（Phase 2、`plan_type`と`subscriptions`テーブルは用意済み）
