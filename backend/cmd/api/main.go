@@ -9,6 +9,7 @@ import (
 	_ "github.com/lib/pq"
 
 	infraauth "github.com/tortillaproduction/study-tracker/internal/infrastructure/auth"
+	"github.com/tortillaproduction/study-tracker/internal/infrastructure/migration"
 	pg "github.com/tortillaproduction/study-tracker/internal/infrastructure/persistence/postgres"
 	httpinterface "github.com/tortillaproduction/study-tracker/internal/interface/http"
 	"github.com/tortillaproduction/study-tracker/internal/interface/http/handler"
@@ -29,6 +30,18 @@ func main() {
 	defer db.Close()
 
 	frontendURL := getEnvOrDefault("FRONTEND_URL", "http://localhost:5173")
+
+	// AUTO_MIGRATE=true(デフォルト、開発時向け)ならアプリ起動時に自動でマイグレーションを実行する。
+	// 本番運用ではdocker-compose.prod.ymlでAUTO_MIGRATE=falseにし、
+	// 専用のmigrateコンテナで事前に1回だけ明示的に実行する運用に切り替える想定。
+	if getEnvOrDefault("AUTO_MIGRATE", "true") == "true" {
+		migrationPath := getEnvOrDefault("MIGRATION_PATH", "./migrations")
+		logger.Info("running migrations", "path", migrationPath)
+		if err := migration.Run(db, migrationPath); err != nil {
+			logger.Error("failed to run migrations", "error", err)
+			os.Exit(1)
+		}
+	}
 
 	// --- 依存性の組み立て（手動DI） ---
 	userRepo := pg.NewUserRepository(db)

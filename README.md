@@ -35,7 +35,17 @@ docker compose up
 
 ## マイグレーション
 
-`golang-migrate` の利用を想定（未インストールの場合は別途導入してください）。
+**開発時（デフォルト）**: `AUTO_MIGRATE=true`（`.env`のデフォルト）の場合、`docker compose up`のたびにバックエンドが起動時に自動で未適用のマイグレーションを実行します。手動での実行は不要です。
+
+**本番相当の検証時**: 複数インスタンス起動時の競合を避けるため、専用の`migrate`コンテナで事前に一度だけ実行し、アプリ側は`AUTO_MIGRATE=false`にします。
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build
+```
+
+このオーバーライドは`migrate/migrate`公式CLIイメージを使って`app`コンテナの起動前にマイグレーションを完了させます（`depends_on: condition: service_completed_successfully`で順序を保証）。
+
+手元のCLIで直接実行したい場合は`golang-migrate`をインストールした上でこちらも使えます。
 
 ```bash
 migrate -path ./backend/migrations \
@@ -106,6 +116,7 @@ make test
 - [x] 認証ミドルウェア（`RequireAuth`）とフロントエンドの認証状態分岐（ログイン画面⇔ダッシュボード）
 - [x] サイト登録API（登録=初回チェックイン）
 - [x] 経由リンク方式のチェックインAPI（`/go/:siteId`、認証必須）
+- [x] マイグレーション自動化（開発時: main.go起動時に自動実行 / 本番相当: 専用migrateコンテナで事前実行）
 - [ ] サイト一覧取得API（`GET /api/sites`）とフロントの実データ反映（現状ダミーデータ）
 - [ ] ストリーク計算API・ダッシュボード表示（計算ロジック自体は`domain/checkin/streak.go`に実装済み）
 - [ ] メール通知バッチ（未訪問サイトの検出）

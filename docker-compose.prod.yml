@@ -1,0 +1,31 @@
+# 本番相当の運用を想定したオーバーライド。
+# 開発用のdocker-compose.ymlに重ねて使う。
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build
+#
+# 変更点:
+# - app: AUTO_MIGRATE を false にし、起動時の自動マイグレーションを止める
+# - migrate: golang-migrate公式CLIイメージで、appより先に一度だけマイグレーションを実行する
+#            (複数インスタンスを同時に起動してもマイグレーションが重複実行されない)
+
+services:
+  migrate:
+    image: migrate/migrate:v4.17.1
+    volumes:
+      - ./backend/migrations:/migrations:ro
+    command:
+      - "-path"
+      - "/migrations"
+      - "-database"
+      - "postgres://postgres:postgres@db:5432/studytracker?sslmode=disable"
+      - "up"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    environment:
+      AUTO_MIGRATE: "false"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
