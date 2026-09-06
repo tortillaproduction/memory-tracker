@@ -36,6 +36,11 @@ const (
 
 // AuthURL はユーザーをGoogleの同意画面へ送るためのURLを組み立てる。
 // state はCSRF対策のランダム文字列で、ハンドラー側でCookieに保存した値と突き合わせる。
+//
+// prompt パラメータは意図的に指定していない。
+// これによりGoogle側の既存ブラウザセッションが有効な間（通常は1時間以上持続する）は
+// アカウント選択画面がスキップされ、自動的にログインが継続する。
+// 複数アカウントの誤選択を防ぎたい場合は "prompt": {"select_account"} を追加すること。
 func (c *GoogleOAuthClient) AuthURL(state string) string {
 	q := url.Values{
 		"client_id":     {c.clientID},
@@ -44,7 +49,7 @@ func (c *GoogleOAuthClient) AuthURL(state string) string {
 		"scope":         {"openid email profile"},
 		"state":         {state},
 		"access_type":   {"online"},
-		"prompt":        {"select_account"},
+		// "prompt":        {"select_account"},
 	}
 	return googleAuthURL + "?" + q.Encode()
 }
