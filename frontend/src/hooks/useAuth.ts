@@ -1,10 +1,8 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { fetchCurrentUser, logout as logoutRequest } from '../api/auth'
 import { ApiError } from '../api/client'
 
 export function useAuth() {
-    const queryClient = useQueryClient()
-
     const { data: user, isLoading, isError, error } = useQuery({
         queryKey: ['currentUser'],
         queryFn: fetchCurrentUser,
@@ -16,8 +14,7 @@ export function useAuth() {
 
   async function logout() {
     await logoutRequest()
-    queryClient.setQueryData(['currentUser'], undefined)
-    queryClient.invalidateQueries({ queryKey: ['currentUser'] })
+    window.location.href = '/'
   }
 
   return {
