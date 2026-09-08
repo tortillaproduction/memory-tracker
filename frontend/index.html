@@ -3,7 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Study Tracker</title>
+    <title>Memory Tracker</title>
+    <script>
+      // Reactマウント前にテーマを適用し、デフォルトテーマが一瞬表示される
+      // ちらつき(FOUC)を防ぐ。ThemeSwitcherコンポーネントの初期値ロジックと対応させること。
+      (function () {
+        var theme = localStorage.getItem('theme') || 'silk';
+        document.documentElement.setAttribute('data-theme', theme);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

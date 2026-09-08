@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"errors"
 
-	"github.com/tortillaproduction/study-tracker/internal/domain/plan"
-	"github.com/tortillaproduction/study-tracker/internal/domain/user"
+	"github.com/tortillaproduction/memory-tracker/internal/domain/plan"
+	"github.com/tortillaproduction/memory-tracker/internal/domain/user"
 )
 
 type userRepository struct {

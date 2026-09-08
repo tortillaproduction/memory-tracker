@@ -8,7 +8,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/tortillaproduction/study-tracker/internal/domain/user"
+	"github.com/tortillaproduction/memory-tracker/internal/domain/user"
 )
 
 var ErrSessionNotFound = errors.New("session not found")

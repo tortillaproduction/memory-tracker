@@ -1,79 +1,95 @@
-import { useAuth } from '../hooks/useAuth'
+import { useAuth } from '../hooks/useAuth';
 
 // NOTE: サイト一覧・ストリークはまだ /api/sites 等のAPIが無いためダミーデータを使用。
 // バックエンド側のエンドポイントが揃い次第、useAuthと同様にReact Queryのフックへ置き換える想定。
 
-
 type SiteStatus = {
-  id: string
-  name: string
-  hoursSinceLastCheckIn: number
-  intervalHours: number
-  streakDays: number
-}
+  id: string;
+  name: string;
+  hoursSinceLastCheckIn: number;
+  intervalHours: number;
+  streakDays: number;
+};
 
 const dummySites: SiteStatus[] = [
-  { id: '1', name: 'Progate', hoursSinceLastCheckIn: 3, intervalHours: 24, streakDays: 12 },
-  { id: '2', name: 'Udemy - Go入門', hoursSinceLastCheckIn: 20, intervalHours: 24, streakDays: 2 },
-  { id: '3', name: 'AtCoder', hoursSinceLastCheckIn: 30, intervalHours: 24, streakDays: 0 },
-]
+  {
+    id: '1',
+    name: 'Progate',
+    hoursSinceLastCheckIn: 3,
+    intervalHours: 24,
+    streakDays: 12,
+  },
+  {
+    id: '2',
+    name: 'Udemy - Go入門',
+    hoursSinceLastCheckIn: 20,
+    intervalHours: 24,
+    streakDays: 2,
+  },
+  {
+    id: '3',
+    name: 'AtCoder',
+    hoursSinceLastCheckIn: 30,
+    intervalHours: 24,
+    streakDays: 0,
+  },
+];
 
-function statusColor(hoursSince: number, interval: number): string {
-  const ratio = hoursSince / interval
-  if (ratio < 0.5) return 'bg-green-100 border-green-400 text-green-800'
-  if (ratio < 1) return 'bg-yellow-100 border-yellow-400 text-yellow-800'
-  return 'bg-red-100 border-red-400 text-red-800'
+function statusBadgeClass(hoursSince: number, interval: number): string {
+  const ratio = hoursSince / interval;
+  if (ratio < 0.5) return 'badge-success';
+  if (ratio < 1) return 'badge-warning';
+  return 'badge-error';
 }
 
 export default function Dashboard() {
-  const { user, logout } = useAuth()
-  const userStreak = 12 // TODO: APIから取得
+  const { user } = useAuth();
+  const userStreak = 12; // TODO: /api/streaks 実装後に置き換え
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-4">
-        <p>Logged in as {user?.name}</p>
-        <button
-          onClick={() => logout()}
-          className="text-sm text-slate-400 hover:text-slate-600"
-        >
-          Logout
-        </button>
+      <div className="text-center mb-8">
+        <p className="text-4xl font-extrabold text-slate-700">
+          {' '}
+          🔥{userStreak} days streak
+        </p>
+        {user?.planType == 'free' && (
+          <p className="mt-2 text-xs text-slate-400">
+            Free Plan - Add to {user.maxSites} sites. Upgrade to premium for
+            unlimited sites.
+          </p>
+        )}
       </div>
-
-      <header className="mb-8 text-center">
-        <h1 className="text-2xl font-bold text-slate-800">Study Tracker</h1>
-        <p className="mt-2 text-4xl">🔥 {userStreak}日連続</p>
-      </header>
 
       <div className="space-y-3">
         {dummySites.map((site) => (
-          <div
-            key={site.id}
-            className={`rounded-lg border-2 p-4 flex items-center justify-between ${statusColor(
-              site.hoursSinceLastCheckIn,
-              site.intervalHours,
-            )}`}
-          >
-            <div>
-              <p className="font-semibold">{site.name}</p>
-              <p className="text-sm opacity-80">
-                最終訪問から{site.hoursSinceLastCheckIn}時間 ・ 連続{site.streakDays}日
-              </p>
+          <div key={site.id} className="card bg-base-100 shadow-sm">
+            <div className="card-body flex-row items-center justify-between py-4">
+              <div>
+                <p className="font-semibold">{site.name}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span
+                    className={`badge badge-sm ${statusBadgeClass(site.hoursSinceLastCheckIn, site.intervalHours)}`}
+                  >
+                    {site.hoursSinceLastCheckIn} hours passed since last
+                    check-in
+                  </span>
+                  <span className="text-xs text-base-content/60">
+                    {site.streakDays} days streak
+                  </span>
+                </div>
+              </div>
+              <a href={`/go/${site.id}`} className="btn btn-primary btn-sm">
+                open
+              </a>
             </div>
-            <a
-              href={`/go/${site.id}`}
-              className="px-4 py-2 rounded-md bg-slate-800 text-white text-sm font-medium hover:bg-slate-700"
-            >
-              開く
-            </a>
           </div>
         ))}
       </div>
 
-      <button className="mt-6 w-full py-3 rounded-lg border-2 border-dashed border-slate-300 text-slate-500 hover:border-slate-400">
-        + サイトを追加
+      <button className="btn w-full mt-6 border-dashed btn-block hover:border-base-content">
+        + Add Site
       </button>
     </div>
-  )
+  );
 }

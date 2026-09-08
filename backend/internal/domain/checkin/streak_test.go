@@ -6,9 +6,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/tortillaproduction/study-tracker/internal/domain/checkin"
-	"github.com/tortillaproduction/study-tracker/internal/domain/site"
-	"github.com/tortillaproduction/study-tracker/internal/domain/user"
+	"github.com/tortillaproduction/memory-tracker/internal/domain/checkin"
+	"github.com/tortillaproduction/memory-tracker/internal/domain/site"
+	"github.com/tortillaproduction/memory-tracker/internal/domain/user"
 )
 
 var _ = Describe("CalculateUserStreak", func() {

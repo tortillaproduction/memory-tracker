@@ -3,7 +3,7 @@ package site
 import (
 	"context"
 
-	"github.com/tortillaproduction/study-tracker/internal/domain/user"
+	"github.com/tortillaproduction/memory-tracker/internal/domain/user"
 )
 
 // Repository はドメイン層で定義するインターフェース。

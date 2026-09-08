@@ -4,11 +4,11 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/tortillaproduction/study-tracker/internal/infrastructure/auth"
-	"github.com/tortillaproduction/study-tracker/internal/interface/http/handler"
-	"github.com/tortillaproduction/study-tracker/internal/interface/http/middleware"
-	"github.com/tortillaproduction/study-tracker/internal/usecase/checkin_site"
-	"github.com/tortillaproduction/study-tracker/internal/usecase/register_site"
+	"github.com/tortillaproduction/memory-tracker/internal/infrastructure/auth"
+	"github.com/tortillaproduction/memory-tracker/internal/interface/http/handler"
+	"github.com/tortillaproduction/memory-tracker/internal/interface/http/middleware"
+	"github.com/tortillaproduction/memory-tracker/internal/usecase/checkin_site"
+	"github.com/tortillaproduction/memory-tracker/internal/usecase/register_site"
 )
 
 type Dependencies struct {

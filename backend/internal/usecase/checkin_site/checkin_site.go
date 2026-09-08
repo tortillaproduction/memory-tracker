@@ -3,9 +3,9 @@ package checkin_site
 import (
 	"context"
 
-	"github.com/tortillaproduction/study-tracker/internal/domain/checkin"
-	"github.com/tortillaproduction/study-tracker/internal/domain/site"
-	"github.com/tortillaproduction/study-tracker/internal/domain/user"
+	"github.com/tortillaproduction/memory-tracker/internal/domain/checkin"
+	"github.com/tortillaproduction/memory-tracker/internal/domain/site"
+	"github.com/tortillaproduction/memory-tracker/internal/domain/user"
 )
 
 // Usecase は /go/:siteId が踏まれたときに呼ばれる。

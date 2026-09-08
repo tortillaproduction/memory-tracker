@@ -8,10 +8,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/tortillaproduction/study-tracker/internal/domain/user"
-	"github.com/tortillaproduction/study-tracker/internal/infrastructure/auth"
-	"github.com/tortillaproduction/study-tracker/internal/interface/http/middleware"
-	usecaseauth "github.com/tortillaproduction/study-tracker/internal/usecase/auth"
+	"github.com/tortillaproduction/memory-tracker/internal/domain/user"
+	"github.com/tortillaproduction/memory-tracker/internal/infrastructure/auth"
+	"github.com/tortillaproduction/memory-tracker/internal/interface/http/middleware"
+	usecaseauth "github.com/tortillaproduction/memory-tracker/internal/usecase/auth"
 )
 
 const oauthStateCookieName = "oauth_state"

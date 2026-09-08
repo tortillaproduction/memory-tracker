@@ -1,4 +1,4 @@
-# Study Tracker
+# Memory Tracker
 
 学習意欲が高いときに登録したWebサイト・サービスを、一定期間訪問しなかったら通知して忘却を防ぐサービス。
 
@@ -16,7 +16,7 @@
 詳細は [DIRECTORY_STRUCTURE.md](./DIRECTORY_STRUCTURE.md) を参照。
 
 ```
-study-tracker/
+memory-tracker/
 ├── backend/    # Go + DDD API
 ├── frontend/   # React SPA
 └── docker-compose.yml

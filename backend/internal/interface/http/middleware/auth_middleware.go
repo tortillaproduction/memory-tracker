@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/tortillaproduction/study-tracker/internal/infrastructure/auth"
+	"github.com/tortillaproduction/memory-tracker/internal/infrastructure/auth"
 )
 
 type contextKey string

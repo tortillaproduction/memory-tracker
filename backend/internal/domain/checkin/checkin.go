@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/tortillaproduction/study-tracker/internal/domain/site"
-	"github.com/tortillaproduction/study-tracker/internal/domain/user"
+	"github.com/tortillaproduction/memory-tracker/internal/domain/site"
+	"github.com/tortillaproduction/memory-tracker/internal/domain/user"
 )
 
 type ID string

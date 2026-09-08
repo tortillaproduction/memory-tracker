@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/tortillaproduction/study-tracker/internal/domain/site"
-	"github.com/tortillaproduction/study-tracker/internal/domain/user"
+	"github.com/tortillaproduction/memory-tracker/internal/domain/site"
+	"github.com/tortillaproduction/memory-tracker/internal/domain/user"
 )
 
 // siteRepository は domain/site.Repository インターフェースの実装。

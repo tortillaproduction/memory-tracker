@@ -1,4 +1,4 @@
-module github.com/tortillaproduction/study-tracker
+module github.com/tortillaproduction/memory-tracker
 
 go 1.24.0
 

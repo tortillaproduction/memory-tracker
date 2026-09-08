@@ -5,10 +5,10 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/tortillaproduction/study-tracker/internal/domain/site"
-	"github.com/tortillaproduction/study-tracker/internal/domain/user"
-	"github.com/tortillaproduction/study-tracker/internal/interface/http/middleware"
-	"github.com/tortillaproduction/study-tracker/internal/usecase/checkin_site"
+	"github.com/tortillaproduction/memory-tracker/internal/domain/site"
+	"github.com/tortillaproduction/memory-tracker/internal/domain/user"
+	"github.com/tortillaproduction/memory-tracker/internal/interface/http/middleware"
+	"github.com/tortillaproduction/memory-tracker/internal/usecase/checkin_site"
 )
 
 type CheckInHandler struct {

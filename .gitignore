@@ -11,3 +11,6 @@ backend/bin/
 
 # OS
 .DS_Store
+
+# Logs
+*.log

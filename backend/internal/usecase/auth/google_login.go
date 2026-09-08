@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	domainUser "github.com/tortillaproduction/study-tracker/internal/domain/user"
+	domainUser "github.com/tortillaproduction/memory-tracker/internal/domain/user"
 )
 
 // GoogleUserInfo はinfrastructure/authパッケージへの直接依存を避けるための入力DTO。

@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/tortillaproduction/study-tracker/internal/usecase/register_site"
+	"github.com/tortillaproduction/memory-tracker/internal/usecase/register_site"
 )
 
 type SiteHandler struct {

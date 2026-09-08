@@ -3,7 +3,7 @@ package site
 import (
 	"time"
 
-	"github.com/tortillaproduction/study-tracker/internal/domain/user"
+	"github.com/tortillaproduction/memory-tracker/internal/domain/user"
 )
 
 type ID string

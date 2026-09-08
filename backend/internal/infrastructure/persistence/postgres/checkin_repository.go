@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/tortillaproduction/study-tracker/internal/domain/checkin"
-	"github.com/tortillaproduction/study-tracker/internal/domain/site"
-	"github.com/tortillaproduction/study-tracker/internal/domain/user"
+	"github.com/tortillaproduction/memory-tracker/internal/domain/checkin"
+	"github.com/tortillaproduction/memory-tracker/internal/domain/site"
+	"github.com/tortillaproduction/memory-tracker/internal/domain/user"
 )
 
 type checkinRepository struct {

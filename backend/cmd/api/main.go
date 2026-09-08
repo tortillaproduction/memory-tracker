@@ -8,14 +8,14 @@ import (
 
 	_ "github.com/lib/pq"
 
-	infraauth "github.com/tortillaproduction/study-tracker/internal/infrastructure/auth"
-	"github.com/tortillaproduction/study-tracker/internal/infrastructure/migration"
-	pg "github.com/tortillaproduction/study-tracker/internal/infrastructure/persistence/postgres"
-	httpinterface "github.com/tortillaproduction/study-tracker/internal/interface/http"
-	"github.com/tortillaproduction/study-tracker/internal/interface/http/handler"
-	usecaseauth "github.com/tortillaproduction/study-tracker/internal/usecase/auth"
-	"github.com/tortillaproduction/study-tracker/internal/usecase/checkin_site"
-	"github.com/tortillaproduction/study-tracker/internal/usecase/register_site"
+	infraauth "github.com/tortillaproduction/memory-tracker/internal/infrastructure/auth"
+	"github.com/tortillaproduction/memory-tracker/internal/infrastructure/migration"
+	pg "github.com/tortillaproduction/memory-tracker/internal/infrastructure/persistence/postgres"
+	httpinterface "github.com/tortillaproduction/memory-tracker/internal/interface/http"
+	"github.com/tortillaproduction/memory-tracker/internal/interface/http/handler"
+	usecaseauth "github.com/tortillaproduction/memory-tracker/internal/usecase/auth"
+	"github.com/tortillaproduction/memory-tracker/internal/usecase/checkin_site"
+	"github.com/tortillaproduction/memory-tracker/internal/usecase/register_site"
 )
 
 func main() {

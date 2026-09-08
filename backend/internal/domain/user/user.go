@@ -3,7 +3,7 @@ package user
 import (
 	"time"
 
-	"github.com/tortillaproduction/study-tracker/internal/domain/plan"
+	"github.com/tortillaproduction/memory-tracker/internal/domain/plan"
 )
 
 // User はドメインのエンティティ。IDで同一性を判定する。
