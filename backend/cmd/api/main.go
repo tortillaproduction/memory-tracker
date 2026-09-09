@@ -15,6 +15,8 @@ import (
 	"github.com/tortillaproduction/memory-tracker/internal/interface/http/handler"
 	usecaseauth "github.com/tortillaproduction/memory-tracker/internal/usecase/auth"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/checkin_site"
+	"github.com/tortillaproduction/memory-tracker/internal/usecase/delete_site"
+	"github.com/tortillaproduction/memory-tracker/internal/usecase/list_sites"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/register_site"
 )
 
@@ -57,6 +59,8 @@ func main() {
 	)
 
 	registerSiteUC := register_site.NewUsecase(userRepo, siteRepo, checkinRepo, idGen)
+	listSitesUC := list_sites.NewUsecase(siteRepo, checkinRepo)
+	deleteSiteUC := delete_site.NewUsecase(siteRepo)
 	checkinSiteUC := checkin_site.NewUsecase(siteRepo, checkinRepo, idGen)
 	googleLoginUC := usecaseauth.NewUsecase(userRepo, idGen)
 
@@ -64,6 +68,8 @@ func main() {
 
 	router := httpinterface.NewRouter(httpinterface.Dependencies{
 		RegisterSiteUsecase: registerSiteUC,
+		ListSiteUsecase:     listSitesUC,
+		DeleteSiteUsecase:   deleteSiteUC,
 		CheckinSiteUsecase:  checkinSiteUC,
 		AuthHandler:         authHandler,
 		SessionStore:        sessionStore,

@@ -19,19 +19,20 @@ func NewUserRepository(db *sql.DB) user.Repository {
 
 func (r *userRepository) Save(ctx context.Context, u *user.User) error {
 	_, err := r.db.ExecContext(ctx, `
-		INSERT INTO users (id, google_id, email, name, plan_type)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO users (id, google_id, email, name, picture_url, plan_type)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (id) DO UPDATE SET
 		  email = EXCLUDED.email,
 		  name = EXCLUDED.name,
+		  picture_url = EXCLUDED.picture_url,
 		  plan_type = EXCLUDED.plan_type
-	`, u.ID(), u.GoogleID(), u.Email(), u.Name(), string(u.Plan().Type()))
+	`, u.ID(), u.GoogleID(), u.Email(), u.Name(), u.PictureURL(), string(u.Plan().Type()))
 	return err
 }
 
 func (r *userRepository) FindByID(ctx context.Context, id user.ID) (*user.User, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, google_id, email, name, plan_type
+		SELECT id, google_id, email, name, picture_url, plan_type
 		FROM users WHERE id = $1
 	`, id)
 
@@ -44,7 +45,7 @@ func (r *userRepository) FindByID(ctx context.Context, id user.ID) (*user.User, 
 
 func (r *userRepository) FindByGoogleID(ctx context.Context, googleID string) (*user.User, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, google_id, email, name, plan_type
+		SELECT id, google_id, email, name, picture_url, plan_type
 		FROM users WHERE google_id = $1
 	`, googleID)
 
@@ -57,11 +58,12 @@ func (r *userRepository) FindByGoogleID(ctx context.Context, googleID string) (*
 
 func scanUser(row *sql.Row) (*user.User, error) {
 	var id, googleID, email, name, planType string
-	if err := row.Scan(&id, &googleID, &email, &name, &planType); err != nil {
+	var pictureURL sql.NullString
+	if err := row.Scan(&id, &googleID, &email, &name, &pictureURL, &planType); err != nil {
 		return nil, err
 	}
 
-	u := user.NewUser(user.ID(id), googleID, email, name)
+	u := user.NewUser(user.ID(id), googleID, email, name, pictureURL.String)
 	if planType == string(plan.TypePremium) {
 		u.UpgradeTo(plan.Premium())
 	}

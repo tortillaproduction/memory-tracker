@@ -13,6 +13,7 @@ type GoogleUserInfo struct {
 	GoogleID string
 	Email    string
 	Name     string
+	Picture  string
 }
 
 type IDGenerator interface {
@@ -32,13 +33,19 @@ func NewUsecase(userRepo domainUser.Repository, idGen IDGenerator) *Usecase {
 func (uc *Usecase) Execute(ctx context.Context, info GoogleUserInfo) (*domainUser.User, error) {
 	existing, err := uc.userRepo.FindByGoogleID(ctx, info.GoogleID)
 	if err == nil {
+		if existing.PictureURL() != info.Picture {
+			existing.UpdatePicture(info.Picture)
+			if err := uc.userRepo.Save(ctx, existing); err != nil {
+				return nil, err
+			}
+		}
 		return existing, nil
 	}
 	if !errors.Is(err, domainUser.ErrNotFound) {
 		return nil, err
 	}
 
-	newUser := domainUser.NewUser(uc.idGenerator.NewUserID(), info.GoogleID, info.Email, info.Name)
+	newUser := domainUser.NewUser(uc.idGenerator.NewUserID(), info.GoogleID, info.Email, info.Name, info.Picture)
 	if err := uc.userRepo.Save(ctx, newUser); err != nil {
 		return nil, err
 	}

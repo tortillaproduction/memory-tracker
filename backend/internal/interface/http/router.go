@@ -8,11 +8,15 @@ import (
 	"github.com/tortillaproduction/memory-tracker/internal/interface/http/handler"
 	"github.com/tortillaproduction/memory-tracker/internal/interface/http/middleware"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/checkin_site"
+	"github.com/tortillaproduction/memory-tracker/internal/usecase/delete_site"
+	"github.com/tortillaproduction/memory-tracker/internal/usecase/list_sites"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/register_site"
 )
 
 type Dependencies struct {
 	RegisterSiteUsecase *register_site.Usecase
+	ListSiteUsecase     *list_sites.Usecase
+	DeleteSiteUsecase   *delete_site.Usecase
 	CheckinSiteUsecase  *checkin_site.Usecase
 	AuthHandler         *handler.AuthHandler
 	SessionStore        *auth.SessionStore
@@ -23,7 +27,12 @@ type Dependencies struct {
 func NewRouter(deps Dependencies) http.Handler {
 	mux := http.NewServeMux()
 
-	siteHandler := handler.NewSiteHandler(deps.RegisterSiteUsecase, deps.Logger)
+	siteHandler := handler.NewSiteHandler(
+		deps.RegisterSiteUsecase,
+		deps.ListSiteUsecase,
+		deps.DeleteSiteUsecase,
+		deps.Logger,
+	)
 	checkinHandler := handler.NewCheckInHandler(deps.CheckinSiteUsecase, deps.Logger)
 	requireAuth := middleware.RequireAuth(deps.SessionStore)
 
@@ -34,10 +43,10 @@ func NewRouter(deps Dependencies) http.Handler {
 
 	// --- 認証必須 ---
 	mux.Handle("GET /api/auth/me", requireAuth(http.HandlerFunc(deps.AuthHandler.Me)))
+	mux.Handle("GET /api/sites", requireAuth(http.HandlerFunc(siteHandler.List)))
 	mux.Handle("POST /api/sites", requireAuth(http.HandlerFunc(siteHandler.Register)))
+	mux.Handle("DELETE /api/sites/{siteId}", requireAuth(http.HandlerFunc(siteHandler.Delete)))
 	mux.Handle("GET /go/{siteId}", requireAuth(http.HandlerFunc(checkinHandler.CheckInAndRedirect)))
-
-	// TODO: GET /api/sites（一覧取得）、DELETE /api/sites/{id}、GET /api/streaks 等を追加
 
 	return withCORS(deps.FrontendURL, mux)
 }

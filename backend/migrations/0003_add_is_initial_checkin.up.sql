@@ -1,0 +1,1 @@
+ALTER TABLE check_ins ADD COLUMN is_initial BOOLEAN NOT NULL DEFAULT false;

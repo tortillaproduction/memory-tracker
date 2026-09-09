@@ -27,7 +27,7 @@ func (r *siteRepository) Save(ctx context.Context, s *site.Site) error {
 			url = EXCLUDED.url,
 			interval_hours = EXCLUDED.interval_hours,
 			is_archived = EXCLUDED.is_archived
-	`, s.ID(), s.UserID(), s.Name(), s.URL(), s.URL(), s.IntervalHours(), s.IsArchived())
+	`, s.ID(), s.UserID(), s.Name(), s.URL(), s.IntervalHours(), s.IsArchived())
 	return err
 }
 

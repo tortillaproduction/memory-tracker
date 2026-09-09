@@ -58,7 +58,8 @@ func (uc *Usecase) Execute(ctx context.Context, in Input) (*site.Site, error) {
 	}
 
 	// 「登録=チェックイン」のルールをここで満たす。
-	initialCheckIn := checkin.NewCheckIn(uc.idGenerator.NewCheckInID(), in.UserID, newSite.ID())
+	// 登録時のチェックインはis_initial=trueにし、ストリーク計算の対象外とする。
+	initialCheckIn := checkin.NewInitialCheckIn(uc.idGenerator.NewCheckInID(), in.UserID, newSite.ID())
 	if err := uc.checkinRepo.Save(ctx, initialCheckIn); err != nil {
 		return nil, err
 	}
