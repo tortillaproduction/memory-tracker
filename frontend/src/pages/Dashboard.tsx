@@ -3,6 +3,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useDeleteSite, useSites } from '../hooks/useSites';
 import { API_BASE_URL } from '../api/client';
 import AddSiteModal from '../components/AddSiteModal';
+import DeleteSiteModal from '../components/DeleteSiteModal';
 
 function statusBadgeClass(hoursSince: number, interval: number): string {
   const ratio = hoursSince / interval;
@@ -14,8 +15,12 @@ function statusBadgeClass(hoursSince: number, interval: number): string {
 export default function Dashboard() {
   const { user } = useAuth();
   const { data, isLoading, isError } = useSites();
-  const { mutate: deleteSite } = useDeleteSite();
+  const { mutate: deleteSite, isPending: isDeleting } = useDeleteSite();
   const [showAddModal, setShowAddModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   const sites = data?.sites ?? [];
   const userStreak = data?.userStreak ?? 0;
@@ -89,7 +94,8 @@ export default function Dashboard() {
                       : `${Math.floor(site.hoursSinceLastCheck)} hours passed`}
                   </span>
                   <span className="text-xs text-base-content/60">
-                    {site.siteStreak} {site.siteStreak === 1 ? 'day' : 'days'} streak
+                    {site.siteStreak} {site.siteStreak === 1 ? 'day' : 'days'}{' '}
+                    streak
                   </span>
                 </div>
               </div>
@@ -107,11 +113,7 @@ export default function Dashboard() {
                 <button
                   className="btn btn-sm btn-ghost text-error"
                   onClick={() => {
-                    if (
-                      confirm(`Are you sure you want to delete ${site.name}?`)
-                    ) {
-                      deleteSite(site.id);
-                    }
+                    setDeleteTarget({ id: site.id, name: site.name });
                   }}
                 >
                   delete
@@ -130,6 +132,19 @@ export default function Dashboard() {
       </button>
 
       {showAddModal && <AddSiteModal onClose={() => setShowAddModal(false)} />}
+
+      {deleteTarget && (
+        <DeleteSiteModal
+          siteName={deleteTarget.name}
+          isPending={isDeleting}
+          onConfirm={() =>
+            deleteSite(deleteTarget.id, {
+              onSuccess: () => setDeleteTarget(null),
+            })
+          }
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }
