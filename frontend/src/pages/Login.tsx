@@ -22,25 +22,42 @@ function GoogleIcon() {
         d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.167 6.656 3.58 9 3.58z"
       />
     </svg>
-  )
+  );
 }
 
 export default function Login() {
-    return (
-        <div className="min-h-[80vh] flex items-center justify-center px-4">
-            <div className='card w-full max-w-sm bg-base-100 shadow-xl'>
-            <div className="card-body items-center text-center">
-                <h1 className="card-title">Memory Tracker</h1>
-                <p className="text-base-content/60 mb-4">before forget</p>
-                <button
-                    onClick={redirectToGoogleLogin}
-                    className='btn btn-outline text-base-content border-base-content/30 hover:border-base-content w-full gap-2'
-                >
-                    <GoogleIcon />
-                    Sign in with Google
-                </button>
-            </div>
-            </div>
+  return (
+    <div className="min-h-[80vh] flex items-center justify-center px-4">
+      <div className="card w-full max-w-sm bg-base-100 shadow-xl">
+        <div className="card-body items-center text-center">
+          <h2
+            className="text-5xl font-extrabold tracking-wide mb-10"
+            style={{
+              color: '#ffffff',
+              textShadow: [
+                '0 0 2px #ffffff',
+                '0 0 4px #ffffff',
+                '0 0 8px #c4b5fd',
+                '0 0 16px #a78bfa',
+                '0 0 32px #7c3aed',
+                '0 0 60px #6d28d9',
+                '0 0 90px #5b21b6',
+                '0 0 4px #f0abfc',
+              ].join(', '),
+            }}
+          >
+            Memory Tracker
+          </h2>
+          <p className="text-base-content/60 mb-4">before forget</p>
+          <button
+            onClick={redirectToGoogleLogin}
+            className="btn btn-outline text-base-content border-base-content/30 hover:border-base-content w-full gap-2"
+          >
+            <GoogleIcon />
+            Sign in with Google
+          </button>
         </div>
-    )
+      </div>
+    </div>
+  );
 }
