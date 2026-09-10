@@ -1,15 +1,21 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	_ "github.com/lib/pq"
 
 	infraauth "github.com/tortillaproduction/memory-tracker/internal/infrastructure/auth"
+	"github.com/tortillaproduction/memory-tracker/internal/infrastructure/batch"
 	"github.com/tortillaproduction/memory-tracker/internal/infrastructure/migration"
+	"github.com/tortillaproduction/memory-tracker/internal/infrastructure/notification"
 	pg "github.com/tortillaproduction/memory-tracker/internal/infrastructure/persistence/postgres"
 	httpinterface "github.com/tortillaproduction/memory-tracker/internal/interface/http"
 	"github.com/tortillaproduction/memory-tracker/internal/interface/http/handler"
@@ -17,6 +23,7 @@ import (
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/checkin_site"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/delete_site"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/list_sites"
+	"github.com/tortillaproduction/memory-tracker/internal/usecase/notify_overdue_sites"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/register_site"
 )
 
@@ -65,6 +72,25 @@ func main() {
 	googleLoginUC := usecaseauth.NewUsecase(userRepo, idGen)
 
 	authHandler := handler.NewAuthHandler(googleClient, sessionStore, googleLoginUC, userRepo, frontendURL, logger)
+
+	// --- 通知バッチのセットアップ ---
+	// RESEND_API_KEYが設定されていない場合は通知バッチを無効化する。
+	// 開発時はキーなしで起動してもAPIサーバーとしては動作する。
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	if apiKey := os.Getenv("RESEND_API_KEY"); apiKey != "" {
+		emailSender := notification.NewResendEmailSender(
+			apiKey,
+			getEnvOrDefault("EMAIL_FROM_ADDRESS", "onboarding@resend.dev"),
+			getEnvOrDefault("EMAIL_FROM_NAME", "Memory Tracker"),
+		)
+		notifyUC := notify_overdue_sites.NewUsecase(db, emailSender, logger)
+		scheduler := batch.NewNotificationScheduler(notifyUC, 15*time.Minute, logger)
+		scheduler.Start(ctx)
+	} else {
+		logger.Warn("RESEND_API_KEY is not set, notification batch is disabled")
+	}
 
 	router := httpinterface.NewRouter(httpinterface.Dependencies{
 		RegisterSiteUsecase: registerSiteUC,

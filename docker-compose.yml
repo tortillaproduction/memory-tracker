@@ -14,11 +14,15 @@ services:
     ports:
       - "8080:8080"
     environment:
-      DATABASE_URL: postgres://postgres:postgres@db:5432/studytracker?sslmode=disable
+      DATABASE_URL: postgres://postgres:postgres@db:5432/memorytracker?sslmode=disable
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:-http://localhost:8080/api/auth/google/callback}
+      AUTO_MIGRATE: ${AUTO_MIGRATE:-true}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-onboarding@resend.dev}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-Memory Tracker}
     depends_on:
       db:
         condition: service_healthy
@@ -28,7 +32,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: studytracker
+      POSTGRES_DB: memorytracker
     ports:
       - "5432:5432"
     volumes:
