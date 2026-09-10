@@ -30,7 +30,8 @@ export default function Dashboard() {
       <div className="text-center mb-8">
         <p className="text-4xl font-extrabold text-slate-700">
           {' '}
-          🔥{userStreak} {userStreak === 1 ? 'day' : 'days'} streak
+          🔥{userStreak} {userStreak === 0 || userStreak === 1 ? 'day' : 'days'}{' '}
+          streak
         </p>
         {user?.planType == 'free' && (
           <p className="mt-2 text-xs text-slate-400">
@@ -94,7 +95,10 @@ export default function Dashboard() {
                       : `${Math.floor(site.hoursSinceLastCheck)} hours passed`}
                   </span>
                   <span className="text-xs text-base-content/60">
-                    {site.siteStreak} {site.siteStreak === 1 ? 'day' : 'days'}{' '}
+                    {site.siteStreak}{' '}
+                    {site.siteStreak === 0 || site.siteStreak === 1
+                      ? 'day'
+                      : 'days'}{' '}
                     streak
                   </span>
                 </div>
