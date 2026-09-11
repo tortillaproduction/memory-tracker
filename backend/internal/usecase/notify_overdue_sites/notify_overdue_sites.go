@@ -104,7 +104,7 @@ func (uc *Usecase) fetchOverdueSites(ctx context.Context, now time.Time) ([]*Sit
 			--  チェックイン済み -> 最終チェックインからinterval_hours以上経過
 			--  未チェックイン -> 登録から24時間経過 (is_initial=trueのcheck_in時刻を基準)
 			AND (
-				(latest_ci.checked_at IS NOT NULL)
+				(latest_ci.checked_at IS NOT NULL
 				  AND latest_ci.checked_at < $1 - (s.interval_hours || ' hours')::interval)
 				OR
 				(latest_ci.checked_at IS NULL
