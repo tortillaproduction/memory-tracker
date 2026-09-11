@@ -1,0 +1,19 @@
+# 開発用Dockerfile。
+# 本番用（Dockerfile）はマルチステージビルドで軽量なalpineイメージを使うが、
+# Codespacesやローカル開発ではgolang:1.24-alpineのまま使い、
+# ソースをマウントしてgo runで起動する。
+FROM golang:1.24-alpine
+
+RUN apk add --no-cache ca-certificates git
+
+WORKDIR /workspace
+
+COPY go.mod go.sum* ./
+RUN go mod download
+
+COPY . .
+
+EXPOSE 8080
+
+# go run で直接起動（バイナリビルド不要）
+CMD ["go", "run", "./cmd/api"]

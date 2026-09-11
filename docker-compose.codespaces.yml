@@ -1,0 +1,22 @@
+# Codespaces環境用のオーバーライド。
+# 通常のdocker-compose.ymlに重ねて使う。
+#
+# devcontainer.jsonがdockerComposeFileにこのファイルを加えることで
+# 以下の変更が適用される:
+#   - appサービスをDockerfile.dev（go run起動）に切り替え
+#   - backendソースをボリュームマウントしてライブ編集可能にする
+#   - workspaceFolderをプロジェクトルートに設定
+
+services:
+  app:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    volumes:
+      # ソースコードをマウントすることでgo runが常に最新ソースを参照する
+      - .:/workspace
+      - /workspace/frontend  # frontendはappコンテナでは不要なので除外
+    working_dir: /workspace/backend
+    environment:
+      # Codespacesではgo run で起動するためマイグレーションパスを明示
+      MIGRATIONS_PATH: ./migrations

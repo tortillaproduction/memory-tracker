@@ -1,0 +1,60 @@
+{
+  "name": "Memory Tracker",
+
+  // docker-compose.ymlを使ってCodespacesの環境を構築する。
+  // これによりフロントエンド・バックエンド・DBの3コンテナが全て起動する。
+  "dockerComposeFile": ["../docker-compose.yml"],
+
+  // VSCodeのウィンドウが接続するメインのサービス。
+  // appコンテナ内でターミナルやデバッガーが動作する。
+  "service": "app",
+  "workspaceFolder": "/workspace",
+
+  "features": {
+    // Go開発ツール（gopls, dlv等）をインストール
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "1.24"
+    },
+    // Node.js（フロントエンドのnpm操作用）
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "go.useLanguageServer": true,
+        "editor.formatOnSave": true,
+        "[go]": {
+          "editor.defaultFormatter": "golang.go"
+        },
+        "[typescript]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "[typescriptreact]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        }
+      }
+    }
+  },
+
+  // Codespaces起動後にフォワードするポート
+  "forwardPorts": [5173, 8080, 5432],
+  "portsAttributes": {
+    "5173": { "label": "Frontend (Vite)", "onAutoForward": "openBrowser" },
+    "8080": { "label": "Backend (Go API)" },
+    "5432": { "label": "PostgreSQL" }
+  },
+
+  // コンテナ起動後に自動実行するコマンド
+  // .env.exampleからコピーし、go mod tidyで依存関係を解決する
+  "postCreateCommand": "cp -n ../.env.example ../.env 2>/dev/null || true && go mod tidy"
+}
