@@ -105,19 +105,19 @@ func (uc *Usecase) fetchOverdueSites(ctx context.Context, now time.Time) ([]*Sit
 			--  未チェックイン -> 登録から24時間経過 (is_initial=trueのcheck_in時刻を基準)
 			AND (
 				(latest_ci.checked_at IS NOT NULL
-				  AND latest_ci.checked_at < $1 - (s.interval_hours || ' hours')::interval)
+				  AND latest_ci.checked_at < $1::timestamptz - (s.interval_hours || ' hours')::interval)
 				OR
 				(latest_ci.checked_at IS NULL
 				  AND EXISTS (
 				  	SELECT 1 FROM check_ins
 					WHERE site_id = s.id AND is_initial = true
-					AND checked_at < $1 - INTERVAL '24 hours'
+					AND checked_at < $1::timestamptz - INTERVAL '24 hours'
 				  ))
 			)
 			-- 二重送信防止: 前回通知からinterval_hours以上経過しているか未通知
 			AND (
 				latest_nl.sent_at IS NULL
-				OR latest_nl.sent_at < $1 - (s.interval_hours || ' hours')::interval
+				OR latest_nl.sent_at < $1::timestamptz - (s.interval_hours || ' hours')::interval
 			)
 	`
 
