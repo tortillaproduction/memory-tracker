@@ -29,6 +29,13 @@ RUN npm install -g @anthropic-ai/claude-code
 
 COPY . .
 
+# 非rootユーザーを作成。Codespacesの標準ユーザー名に合わせてvscodeにする。
+RUN groupadd --gid 1000 vscode \
+    && useradd --uid 1000 --gid 1000 -m vscode \
+    && chown -R vscode:vscode /workspace
+
+USER vscode
+
 EXPOSE 8080
 
 CMD ["go", "run", "./cmd/api"]
