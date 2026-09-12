@@ -1,3 +1,6 @@
+# Codespaces/開発用Dockerfile。
+# VSCode RemoteがSSH接続できるようcurl/bash/git等のツールを含むDebianベースを使う。
+# alpineはVSCode Remoteと相性が悪いためここではDebian系を採用。
 FROM golang:1.24-bookworm
 
 RUN apt-get update && apt-get install -y \
@@ -13,7 +16,9 @@ WORKDIR /workspace
 COPY go.mod go.sum* ./
 RUN go mod download
 
-RUN go install golang.org/x/tools/gopls@latest
+# goplsはVSCodeのgolang.go拡張機能が自動でインストールするため不要。
+# go install golang.org/x/tools/gopls@latest は
+# gopls v0.23.0 が Go 1.26+ を要求するため Go 1.24 環境では動かない。
 
 # Claude Codeをインストール
 RUN npm install -g @anthropic-ai/claude-code
