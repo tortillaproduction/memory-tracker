@@ -7,8 +7,12 @@ RUN apt-get update && apt-get install -y \
     git \
     curl \
     bash \
-    nodejs \
-    npm \
+    && rm -rf /var/lib/apt/lists/*
+
+# Node.js 22 LTS（LTSの最新版）をNodeSource経由でインストール。
+# aptのデフォルトは古いバージョンになるためこの方法を採用。
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
