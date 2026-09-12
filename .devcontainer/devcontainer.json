@@ -1,6 +1,6 @@
 {
   "name": "Memory Tracker",
-  "dockerComposeFile": ["../docker-compose.yml"],
+  "dockerComposeFile": ["../docker-compose.yml", "../docker-compose.codespaces.yml"],
   "service": "app",
   "workspaceFolder": "/workspace",
 
