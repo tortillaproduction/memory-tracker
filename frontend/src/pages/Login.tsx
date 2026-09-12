@@ -28,10 +28,10 @@ function GoogleIcon() {
 export default function Login() {
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4">
-      <div className="card w-full max-w-sm bg-base-100 shadow-xl">
-        <div className="card-body items-center text-center">
+      <div className="card w-full max-w-md aspect-square bg-base-100 shadow-xl">
+        <div className="card-body items-center justify-center text-center h-full">
           <h2
-            className="text-5xl font-extrabold tracking-wide mb-10"
+            className="text-7xl font-extrabold tracking-wide mb-10 mt-15"
             style={{
               color: '#ffffff',
               textShadow: [
@@ -48,10 +48,15 @@ export default function Login() {
           >
             Memory Tracker
           </h2>
-          <p className="text-base-content/60 mb-4">before forget</p>
+          <p
+            className="text-base-content/60 text-2xl"
+            style={{ textShadow: '1px 1px 2px rgba(0, 0, 0, 0.6)' }}
+          >
+            before forget
+          </p>
           <button
             onClick={redirectToGoogleLogin}
-            className="btn btn-outline text-base-content border-base-content/30 hover:border-base-content w-full gap-2"
+            className="btn btn-outline text-base-content border-base-content/30 hover:border-base-content w-full gap-2 mb-5"
           >
             <GoogleIcon />
             Sign in with Google
