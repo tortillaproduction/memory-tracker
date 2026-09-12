@@ -1,19 +1,24 @@
-# 開発用Dockerfile。
-# 本番用（Dockerfile）はマルチステージビルドで軽量なalpineイメージを使うが、
-# Codespacesやローカル開発ではgolang:1.24-alpineのまま使い、
-# ソースをマウントしてgo runで起動する。
-FROM golang:1.24-alpine
+# Codespaces/開発用Dockerfile。
+# VSCode RemoteがSSH接続できるようcurl/bash/git等のツールを含むDebianベースを使う。
+# alpineはVSCode Remoteと相性が悪いためここではDebian系を採用。
+FROM golang:1.24-bookworm
 
-RUN apk add --no-cache ca-certificates git
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    bash \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
 
 COPY go.mod go.sum* ./
 RUN go mod download
 
+# gopls（Go言語サーバー）をインストール
+RUN go install golang.org/x/tools/gopls@latest
+
 COPY . .
 
 EXPOSE 8080
 
-# go run で直接起動（バイナリビルド不要）
 CMD ["go", "run", "./cmd/api"]
