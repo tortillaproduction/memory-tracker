@@ -56,5 +56,5 @@
 
   // コンテナ起動後に自動実行するコマンド
   // .env.exampleからコピーし、go mod tidyで依存関係を解決する
-  "postCreateCommand": "cp -n ../.env.example ../.env 2>/dev/null || true && go mod tidy"
+  "postCreateCommand": "cp -n ../.env.example ../.env 2>/dev/null || true && go mod tidy && npm install -g @anthropic-ai/claude-code"
 }
