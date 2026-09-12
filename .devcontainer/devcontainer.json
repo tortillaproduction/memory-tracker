@@ -1,15 +1,21 @@
 {
   "name": "Memory Tracker",
 
-  // imageベース + docker-in-docker で構成する。
-  // dockerComposeFile方式はコンテナ内にdockerコマンドが存在しないため採用しない。
-  "image": "mcr.microsoft.com/devcontainers/go:1.24",
+  // docker-compose.ymlを使ってCodespacesの環境を構築する。
+  // これによりフロントエンド・バックエンド・DBの3コンテナが全て起動する。
+  "dockerComposeFile": ["../docker-compose.yml"],
+
+  // VSCodeのウィンドウが接続するメインのサービス。
+  // appコンテナ内でターミナルやデバッガーが動作する。
+  "service": "app",
+  "workspaceFolder": "/workspace",
 
   "features": {
-    // docker-in-docker: コンテナ内でdocker/docker composeコマンドを使えるようにする
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {
-      "dockerDashComposeVersion": "v2"
+    // Go開発ツール（gopls, dlv等）をインストール
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "1.24"
     },
+    // Node.js（フロントエンドのnpm操作用）
     "ghcr.io/devcontainers/features/node:1": {
       "version": "20"
     }
@@ -27,6 +33,9 @@
       "settings": {
         "go.useLanguageServer": true,
         "editor.formatOnSave": true,
+        "[go]": {
+          "editor.defaultFormatter": "golang.go"
+        },
         "[typescript]": {
           "editor.defaultFormatter": "esbenp.prettier-vscode"
         },
@@ -37,6 +46,7 @@
     }
   },
 
+  // Codespaces起動後にフォワードするポート
   "forwardPorts": [5173, 8080, 5432],
   "portsAttributes": {
     "5173": { "label": "Frontend (Vite)", "onAutoForward": "openBrowser" },
@@ -44,9 +54,7 @@
     "5432": { "label": "PostgreSQL" }
   },
 
-  // 初回作成時: .envをコピー
-  "postCreateCommand": "cp -n .env.example .env 2>/dev/null || true",
-
-  // 起動のたびに: docker compose up で全サービスを自動起動
-  "postStartCommand": "docker compose up --build -d"
+  // コンテナ起動後に自動実行するコマンド
+  // .env.exampleからコピーし、go mod tidyで依存関係を解決する
+  "postCreateCommand": "cp -n ../.env.example ../.env 2>/dev/null || true && go mod tidy"
 }
