@@ -1,21 +1,19 @@
 {
   "name": "Memory Tracker",
 
-  // docker-compose.ymlとCodespaces用オーバーライドを使って全コンテナを起動する。
-  // Codespaces起動時に frontend / app / db が全て自動で立ち上がる。
-  "dockerComposeFile": [
-    "../docker-compose.yml",
-    "../docker-compose.codespaces.yml"
-  ],
+  // imageベース + docker-in-docker で構成する。
+  // dockerComposeFile方式はコンテナ内にdockerコマンドが存在しないため採用しない。
+  "image": "mcr.microsoft.com/devcontainers/go:1.24",
 
-  // VSCodeが接続するメインコンテナ。
-  // Dockerfile.devで起動するGoの開発環境コンテナ。
-  "service": "app",
-  "workspaceFolder": "/workspace",
-
-  // runServicesに全サービスを指定することで、
-  // Codespaces起動時にfrontend/app/db全てが自動起動する。
-  "runServices": ["frontend", "app", "db"],
+  "features": {
+    // docker-in-docker: コンテナ内でdocker/docker composeコマンドを使えるようにする
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "dockerDashComposeVersion": "v2"
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    }
+  },
 
   "customizations": {
     "vscode": {
@@ -46,6 +44,9 @@
     "5432": { "label": "PostgreSQL" }
   },
 
-  // 起動後に.envを自動コピー
-  "postCreateCommand": "cp -n .env.example .env 2>/dev/null || true"
+  // 初回作成時: .envをコピー
+  "postCreateCommand": "cp -n .env.example .env 2>/dev/null || true",
+
+  // 起動のたびに: docker compose up で全サービスを自動起動
+  "postStartCommand": "docker compose up --build -d"
 }
