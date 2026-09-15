@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	domainNotification "github.com/tortillaproduction/memory-tracker/internal/domain/notification"
 	domainUser "github.com/tortillaproduction/memory-tracker/internal/domain/user"
 )
 
@@ -18,15 +19,17 @@ type GoogleUserInfo struct {
 
 type IDGenerator interface {
 	NewUserID() domainUser.ID
+	NewNotificationSettingID() domainNotification.ID
 }
 
 type Usecase struct {
-	userRepo    domainUser.Repository
-	idGenerator IDGenerator
+	userRepo         domainUser.Repository
+	notificationRepo domainNotification.Repository
+	idGenerator      IDGenerator
 }
 
-func NewUsecase(userRepo domainUser.Repository, idGen IDGenerator) *Usecase {
-	return &Usecase{userRepo: userRepo, idGenerator: idGen}
+func NewUsecase(userRepo domainUser.Repository, notificationRepo domainNotification.Repository, idGen IDGenerator) *Usecase {
+	return &Usecase{userRepo: userRepo, notificationRepo: notificationRepo, idGenerator: idGen}
 }
 
 // Execute はGoogleIDで既存ユーザーを探し、いなければ新規作成する（＝サインアップと兼ねる）。
@@ -47,6 +50,12 @@ func (uc *Usecase) Execute(ctx context.Context, info GoogleUserInfo) (*domainUse
 
 	newUser := domainUser.NewUser(uc.idGenerator.NewUserID(), info.GoogleID, info.Email, info.Name, info.Picture)
 	if err := uc.userRepo.Save(ctx, newUser); err != nil {
+		return nil, err
+	}
+
+	// 新規ユーザーにはデフォルトの通知設定（メール通知ON）を作成する
+	setting := domainNotification.NewSetting(uc.idGenerator.NewNotificationSettingID(), newUser.ID())
+	if err := uc.notificationRepo.Create(ctx, setting); err != nil {
 		return nil, err
 	}
 

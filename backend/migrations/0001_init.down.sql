@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS subscriptions;
+DROP TABLE IF EXISTS sessions;
+DROP TABLE IF EXISTS notification_settings;
+DROP INDEX IF EXISTS idx_checkins_user_id;
+DROP INDEX IF EXISTS idx_checkins_site_id;
+DROP TABLE IF EXISTS check_ins;
+DROP INDEX IF EXISTS idx_sites_user_id;
+DROP TABLE IF EXISTS sites;
+DROP TABLE IF EXISTS users;

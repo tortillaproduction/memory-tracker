@@ -57,6 +57,7 @@ func main() {
 	siteRepo := pg.NewSiteRepository(db)
 	checkinRepo := pg.NewCheckInRepository(db)
 	idGen := pg.NewULIDGenerator()
+	notificationRepo := pg.NewNotificationRepository(db)
 
 	sessionStore := infraauth.NewSessionStore(db)
 	googleClient := infraauth.NewGoogleOAuthClient(
@@ -69,7 +70,7 @@ func main() {
 	listSitesUC := list_sites.NewUsecase(siteRepo, checkinRepo)
 	deleteSiteUC := delete_site.NewUsecase(siteRepo)
 	checkinSiteUC := checkin_site.NewUsecase(siteRepo, checkinRepo, idGen)
-	googleLoginUC := usecaseauth.NewUsecase(userRepo, idGen)
+	googleLoginUC := usecaseauth.NewUsecase(userRepo, notificationRepo, idGen)
 
 	authHandler := handler.NewAuthHandler(googleClient, sessionStore, googleLoginUC, userRepo, frontendURL, logger)
 
