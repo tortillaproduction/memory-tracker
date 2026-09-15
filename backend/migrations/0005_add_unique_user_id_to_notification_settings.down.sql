@@ -1,0 +1,1 @@
+ALTER TABLE notification_settings DROP CONSTRAINT notification_settings_user_id_key;
