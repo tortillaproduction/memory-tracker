@@ -1,15 +1,44 @@
+import { useEffect } from 'react';
 import ThemeSwitcher from './components/ThemeSwitcher';
+import { LOGIN_TOAST_FLAG_KEY, LOGOUT_TOAST_FLAG_KEY } from './api/auth';
 import { useAuth } from './hooks/useAuth';
+import { ToastList, useToast } from './contexts/ToastContext';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 
 function App() {
   const { user, isLoading, isAuthenticated, logout } = useAuth();
+  const { showToast } = useToast();
+
+  // ログイン/ログアウトはページ全体のリロードを伴うため、直前にsessionStorageへ
+  // 立てておいたフラグをマウント時に確認し、あれば一度だけトースト表示する。
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(LOGOUT_TOAST_FLAG_KEY)) {
+        sessionStorage.removeItem(LOGOUT_TOAST_FLAG_KEY);
+        showToast('Signed out.', 'success');
+      }
+    } catch {
+      // sessionStorageが使えない環境では通知をスキップする
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    try {
+      if (sessionStorage.getItem(LOGIN_TOAST_FLAG_KEY)) {
+        sessionStorage.removeItem(LOGIN_TOAST_FLAG_KEY);
+        showToast(`Signed in as ${user?.name ?? 'user'}.`, 'success');
+      }
+    } catch {
+      // sessionStorageが使えない環境では通知をスキップする
+    }
+  }, [isAuthenticated, user, showToast]);
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {isAuthenticated && (
-        <div className="navbar bg-base-100 px-4 shadow-sm">
+      {isAuthenticated ? (
+        <div className="navbar bg-base-100 px-4 shadow-sm relative">
           <div className="flex-1">
             <span className="text-lg font-bold">Memory Tracker</span>
           </div>
@@ -18,7 +47,11 @@ function App() {
             <ThemeSwitcher />
             {user && (
               <div className="dropdown dropdown-end">
-                <div tabIndex={0} role="button" className="avatar cursor-pointer">
+                <div
+                  tabIndex={0}
+                  role="button"
+                  className="avatar cursor-pointer"
+                >
                   <div className="w-8 rounded-full ring ring-base-300 ring-offset-base-100 ring-offset-1">
                     {user.pictureUrl ? (
                       <img
@@ -48,7 +81,13 @@ function App() {
               </div>
             )}
           </div>
+
+          {/* ナビゲーションバー中央にトーストを表示 */}
+          <ToastList variant="navbar" />
         </div>
+      ) : (
+        // ナビゲーションバーが無い画面(ログイン/ロード中)向けのフォールバック表示
+        <ToastList variant="fixed" />
       )}
 
       {isLoading ? (

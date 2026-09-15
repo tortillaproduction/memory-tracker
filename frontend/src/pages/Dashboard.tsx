@@ -4,6 +4,7 @@ import { useDeleteSite, useSites } from '../hooks/useSites';
 import { API_BASE_URL } from '../api/client';
 import AddSiteModal from '../components/AddSiteModal';
 import DeleteSiteModal from '../components/DeleteSiteModal';
+import { useToast } from '../contexts/ToastContext';
 
 function statusBadgeClass(hoursSince: number, interval: number): string {
   const ratio = hoursSince / interval;
@@ -16,6 +17,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { data, isLoading, isError } = useSites();
   const { mutate: deleteSite, isPending: isDeleting } = useDeleteSite();
+  const { showToast } = useToast();
   const [showAddModal, setShowAddModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string;
@@ -111,6 +113,10 @@ export default function Dashboard() {
                   className="btn btn-primary btn-sm"
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={() =>
+                    // クリック=チェックイン実行のトリガーなので、遷移を止めずにその場でトースト表示する
+                    showToast(`"${site.name}" checked in.`, 'success')
+                  }
                 >
                   open
                 </a>
@@ -143,7 +149,17 @@ export default function Dashboard() {
           isPending={isDeleting}
           onConfirm={() =>
             deleteSite(deleteTarget.id, {
-              onSuccess: () => setDeleteTarget(null),
+              onSuccess: () => {
+                showToast(`"${deleteTarget.name}" deleted.`, 'success');
+                setDeleteTarget(null);
+              },
+              onError: () => {
+                // 削除失敗時はモーダルを開いたままにして再試行できるようにする
+                showToast(
+                  `Failed to delete "${deleteTarget.name}". Please try again`,
+                  'error',
+                );
+              },
             })
           }
           onClose={() => setDeleteTarget(null)}
