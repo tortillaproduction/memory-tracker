@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { useRegisterSite } from '../hooks/useSites';
 import { ApiError } from '../api/client';
+import { useToast } from '../contexts/ToastContext';
 
 type Props = {
   onClose: () => void;
@@ -22,6 +23,7 @@ export default function AddSiteModal({ onClose }: Props) {
   const backdropRef = useRef<HTMLDivElement>(null);
 
   const { mutate: register, isPending } = useRegisterSite();
+  const { showToast } = useToast();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -35,17 +37,27 @@ export default function AddSiteModal({ onClose }: Props) {
       return;
     }
 
+    const trimmedName = name.trim();
+
     register(
-      { name: name.trim(), url: url.trim(), intervalHours },
+      { name: trimmedName, url: url.trim(), intervalHours },
       {
-        onSuccess: () => onClose(),
+        onSuccess: () => {
+          showToast(`"${trimmedName}" added.`, 'success');
+          onClose();
+        },
         onError: (err) => {
+          // サーバー側のエラーはトーストで通知し、モーダルは開いたままにして再入力できるようにする
           if (err instanceof ApiError && err.status === 402) {
-            setErrorMsg(
+            showToast(
               'You have reached the maximum number of sites. Please upgrade your plan to add more sites.',
+              'error',
             );
           } else {
-            setErrorMsg('Failed to register site. Please try again later.');
+            showToast(
+              'Failed to register site. Please try again later.',
+              'error',
+            );
           }
         },
       },

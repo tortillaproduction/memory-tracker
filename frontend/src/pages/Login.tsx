@@ -27,7 +27,7 @@ function GoogleIcon() {
 
 export default function Login() {
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4">
+    <div className="min-h-[90vh] flex items-center justify-center px-4">
       <div className="card w-full max-w-md aspect-square bg-base-100 shadow-xl">
         <div className="card-body items-center justify-center text-center h-full">
           <h2

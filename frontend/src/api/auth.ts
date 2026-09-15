@@ -9,8 +9,19 @@ export type CurrentUser = {
   maxSites: number;
 };
 
+// ログイン/ログアウトはページ全体がリロードされるフローなので、SPAのstateでは
+// 完了をトースト表示できない。sessionStorageにフラグを残し、次回マウント時に
+// App側で検知してトースト表示する。
+export const LOGIN_TOAST_FLAG_KEY = 'mt_show_login_toast';
+export const LOGOUT_TOAST_FLAG_KEY = 'mt_show_logout_toast';
+
 // ログインはリダイレクトフローのため、fetchではなくブラウザ遷移させる。
 export function redirectToGoogleLogin() {
+  try {
+    sessionStorage.setItem(LOGIN_TOAST_FLAG_KEY, '1');
+  } catch {
+    // プライベートブラウジング等でsessionStorageが使えなくてもログイン自体は継続する
+  }
   window.location.href = `${API_BASE_URL}/api/auth/google/login`;
 }
 
@@ -20,4 +31,9 @@ export function fetchCurrentUser(): Promise<CurrentUser> {
 
 export async function logout(): Promise<void> {
   await apiFetch<void>('/api/auth/logout', { method: 'POST' });
+  try {
+    sessionStorage.setItem(LOGOUT_TOAST_FLAG_KEY, '1');
+  } catch {
+    // プライベートブラウジング等でsessionStorageが使えなくてもログアウト自体は継続する
+  }
 }
