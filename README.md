@@ -112,6 +112,51 @@ EMAIL_FROM_NAME=Memory Tracker
 notification_logsに記録（二重送信防止）
 ```
 
+## 本番デプロイ
+
+コストと運用の手間を抑えるため、以下のハイブリッド構成でデプロイする。
+
+| 役割 | サービス |
+|---|---|
+| フロントエンド | [Vercel](https://vercel.com)（Hobbyプラン、$0） |
+| バックエンド | [Render](https://render.com) Web Service（無料枠、無アクセス時はスリープ） |
+| DB | [Neon](https://neon.tech)（サーバーレスPostgres、無料枠） |
+| メール | Resend（既存） |
+
+### 1. Neon（DB）
+
+1. Neonでプロジェクトを作成し、発行された接続文字列（`DATABASE_URL`）を控える
+
+### 2. Render（バックエンド）
+
+1. GitHubリポジトリと連携し、`backend/Dockerfile` を使うWeb Serviceを作成
+2. 環境変数を設定:
+   - `DATABASE_URL`: Neonの接続文字列
+   - `AUTO_MIGRATE`: `false`
+   - `FRONTEND_URL`: Vercelの本番URL（CORS許可オリジンとして使用）
+   - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`
+   - `GOOGLE_REDIRECT_URL`: `https://<Renderのバックエンドドメイン>/api/auth/google/callback`
+   - `SESSION_SECRET`: 開発用とは別に新規生成した強い値
+   - `RESEND_API_KEY` / `EMAIL_FROM_ADDRESS`（独自ドメイン認証後のアドレス） / `EMAIL_FROM_NAME`
+3. Pre-Deploy Command にマイグレーション実行コマンドを設定し、アプリ起動前に一度だけ適用されるようにする（`docker-compose.prod.yml` の `migrate` サービスと同じ考え方）:
+   ```bash
+   migrate -path ./migrations -database "$DATABASE_URL" up
+   ```
+
+### 3. Vercel（フロントエンド）
+
+1. GitHubリポジトリと連携し、Root Directoryを `frontend` に設定（Vite構成は自動検出される）
+2. 環境変数 `VITE_API_BASE_URL` にRenderのバックエンドURLを設定
+3. `frontend/vercel.json` によりSPAのクライアントサイドルーティングが有効になる
+
+### 4. Google OAuthの本番設定
+
+[Google Cloud Console](https://console.cloud.google.com/) の承認済みリダイレクトURIに、本番のRenderバックエンドURL（`https://<Renderドメイン>/api/auth/google/callback`）を追加する。
+
+### 5. CI
+
+`.github/workflows/ci.yml` により、push/PR時にbackendの `go build` / `go vet` / `go test` とfrontendの `npm run build`（型チェック含む）を実行する。実際のデプロイはVercel/Renderそれぞれのgit連携（mainブランチへのpushで自動反映）に任せる。
+
 ## トラブルシューティング
 
 **フロントエンドの `npm install` で ERESOLVE エラーが出る場合**
