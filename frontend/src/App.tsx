@@ -36,7 +36,9 @@ function App() {
   }, [isAuthenticated, user, showToast]);
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div
+      className={`min-h-screen ${isAuthenticated ? 'bg-base-200' : 'bg-slate-200'}`}
+    >
       {isAuthenticated ? (
         <div className="navbar bg-base-100 px-4 shadow-sm relative">
           <div className="flex-1">
