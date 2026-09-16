@@ -6,10 +6,11 @@ import (
 	"github.com/resend/resend-go/v2"
 )
 
-// EmailSender はSendGrid経由でメールを送信する。
+// EmailSender はResend経由でメールを送信する。
 // インターフェースとして切り出しているので、テスト時はモックに差し替えられる。
+// htmlBody が空文字列の場合はテキストメールとして送信する。
 type EmailSender interface {
-	Send(to, toName, subject, body string) error
+	Send(to, toName, subject, textBody, htmlBody string) error
 }
 
 type resendEmailSender struct {
@@ -26,14 +27,15 @@ func NewResendEmailSender(apiKey, fromAddress, fromName string) EmailSender {
 	}
 }
 
-func (s *resendEmailSender) Send(to, toName, subject, body string) error {
+func (s *resendEmailSender) Send(to, toName, subject, textBody, htmlBody string) error {
 	from := fmt.Sprintf("%s <%s>", s.fromName, s.fromAddress)
 
 	params := &resend.SendEmailRequest{
 		From:    from,
 		To:      []string{to},
 		Subject: subject,
-		Text:    body,
+		Text:    textBody,
+		Html:    htmlBody,
 	}
 
 	_, err := s.client.Emails.Send(params)
