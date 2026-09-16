@@ -38,9 +38,11 @@ func (uc *Usecase) Execute(ctx context.Context, info GoogleUserInfo) (*domainUse
 	if err == nil {
 		if existing.PictureURL() != info.Picture {
 			existing.UpdatePicture(info.Picture)
-			if err := uc.userRepo.Save(ctx, existing); err != nil {
+			saved, _, err := uc.userRepo.Save(ctx, existing)
+			if err != nil {
 				return nil, err
 			}
+			return saved, nil
 		}
 		return existing, nil
 	}
@@ -48,16 +50,26 @@ func (uc *Usecase) Execute(ctx context.Context, info GoogleUserInfo) (*domainUse
 		return nil, err
 	}
 
+	// FindByGoogleIDとSaveの間はロックしていないため、同一Googleアカウントに対する
+	// 同時ログインリクエストが両方とも「未存在」と判定してここに来ることがある
+	// (TOCTOU競合)。SaveはgoogleIDをキーにUPSERTするため、後から来た方は
+	// 相手が作成した行を返してもらう形になり、insertedはfalseになる。
 	newUser := domainUser.NewUser(uc.idGenerator.NewUserID(), info.GoogleID, info.Email, info.Name, info.Picture)
-	if err := uc.userRepo.Save(ctx, newUser); err != nil {
+	saved, inserted, err := uc.userRepo.Save(ctx, newUser)
+	if err != nil {
 		return nil, err
+	}
+	if !inserted {
+		// 同時リクエストの相手が先にこのユーザーを作成済み。通知設定は
+		// 相手側の処理で作られるため、ここでは重複作成しない。
+		return saved, nil
 	}
 
 	// 新規ユーザーにはデフォルトの通知設定（メール通知ON）を作成する
-	setting := domainNotification.NewSetting(uc.idGenerator.NewNotificationSettingID(), newUser.ID())
+	setting := domainNotification.NewSetting(uc.idGenerator.NewNotificationSettingID(), saved.ID())
 	if err := uc.notificationRepo.Create(ctx, setting); err != nil {
 		return nil, err
 	}
 
-	return newUser, nil
+	return saved, nil
 }

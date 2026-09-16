@@ -3,6 +3,7 @@ package http
 import (
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 
 	"github.com/tortillaproduction/memory-tracker/internal/infrastructure/auth"
 	"github.com/tortillaproduction/memory-tracker/internal/interface/http/handler"
@@ -48,7 +49,23 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.Handle("DELETE /api/sites/{siteId}", requireAuth(http.HandlerFunc(siteHandler.Delete)))
 	mux.Handle("GET /go/{siteId}", requireAuth(http.HandlerFunc(checkinHandler.CheckInAndRedirect)))
 
-	return withCORS(deps.FrontendURL, mux)
+	return withRecover(deps.Logger, withCORS(deps.FrontendURL, mux))
+}
+
+// withRecover はハンドラー内でのpanicを捕捉し、コネクションを切断させる代わりに
+// 500を返す。recoverが無いとGoの標準http.Serverはpanic時にコネクションを
+// 切断するだけになり、クライアント側には原因不明のネットワークエラーとして
+// 見えてしまうため、切り分けを容易にする目的で入れている。
+func withRecover(logger *slog.Logger, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				logger.Error("panic recovered", "error", rec, "stack", string(debug.Stack()))
+				http.Error(w, "internal server error", http.StatusInternalServerError)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
 }
 
 func withCORS(frontendURL string, next http.Handler) http.Handler {

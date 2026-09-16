@@ -17,17 +17,31 @@ func NewUserRepository(db *sql.DB) user.Repository {
 	return &userRepository{db: db}
 }
 
-func (r *userRepository) Save(ctx context.Context, u *user.User) error {
-	_, err := r.db.ExecContext(ctx, `
+// Save はgoogle_idをUPSERTのキーにする。IDはリクエストのたびに新規生成される
+// ULIDのため主キー競合では検知できず、同一Googleアカウントに対する同時ログイン
+// （TOCTOU競合）はgoogle_idのUNIQUE制約でしか捕捉できないため。
+// RETURNINGの(xmax = 0)は、このステートメント自身がINSERTを行ったか
+// （falseなら既存行の更新＝他方の同時リクエストが先に作成済み）を表す。
+func (r *userRepository) Save(ctx context.Context, u *user.User) (*user.User, bool, error) {
+	row := r.db.QueryRowContext(ctx, `
 		INSERT INTO users (id, google_id, email, name, picture_url, plan_type)
 		VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (id) DO UPDATE SET
+		ON CONFLICT (google_id) DO UPDATE SET
 		  email = EXCLUDED.email,
 		  name = EXCLUDED.name,
 		  picture_url = EXCLUDED.picture_url,
 		  plan_type = EXCLUDED.plan_type
+		RETURNING id, google_id, email, name, picture_url, plan_type, (xmax = 0) AS inserted
 	`, u.ID(), u.GoogleID(), u.Email(), u.Name(), u.PictureURL(), string(u.Plan().Type()))
-	return err
+
+	var id, googleID, email, name, planType string
+	var pictureURL sql.NullString
+	var inserted bool
+	if err := row.Scan(&id, &googleID, &email, &name, &pictureURL, &planType, &inserted); err != nil {
+		return nil, false, err
+	}
+
+	return buildUser(id, googleID, email, name, pictureURL, planType), inserted, nil
 }
 
 func (r *userRepository) FindByID(ctx context.Context, id user.ID) (*user.User, error) {
@@ -63,10 +77,13 @@ func scanUser(row *sql.Row) (*user.User, error) {
 		return nil, err
 	}
 
+	return buildUser(id, googleID, email, name, pictureURL, planType), nil
+}
+
+func buildUser(id, googleID, email, name string, pictureURL sql.NullString, planType string) *user.User {
 	u := user.NewUser(user.ID(id), googleID, email, name, pictureURL.String)
 	if planType == string(plan.TypePremium) {
 		u.UpgradeTo(plan.Premium())
 	}
-
-	return u, nil
+	return u
 }
