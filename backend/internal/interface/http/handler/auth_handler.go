@@ -68,6 +68,17 @@ func (h *AuthHandler) LoginRedirect(w http.ResponseWriter, r *http.Request) {
 // Callback はGoogleからのリダイレクトを受け、認可コードをユーザー情報に交換した上で
 // アプリ独自のセッションを発行し、フロントエンドへリダイレクトする。
 func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
+	// ブラウザの「戻る」操作等でこのコールバックURL（使用済みのcode）が再送されることがある。
+	// Googleの認可コードは一度しか交換できないため、その場合は本来ここで
+	// トークン交換が失敗し502になってしまう。既に有効なセッションCookieがあれば
+	// 既にログイン済みとみなし、再交換せずそのままフロントエンドへ戻す。
+	if sessionCookie, err := r.Cookie(middleware.SeesionCookieName); err == nil {
+		if _, err := h.sessionStore.FindUserID(r.Context(), sessionCookie.Value); err == nil {
+			http.Redirect(w, r, h.frontendURL, http.StatusFound)
+			return
+		}
+	}
+
 	stateCookie, err := r.Cookie(oauthStateCookieName)
 	if err != nil || r.URL.Query().Get("state") != stateCookie.Value {
 		http.Error(w, "invalid state", http.StatusBadRequest)
