@@ -17,7 +17,7 @@ services:
       - "-path"
       - "/migrations"
       - "-database"
-      - "postgres://postgres:postgres@db:5432/studytracker?sslmode=disable"
+      - "postgres://postgres:postgres@db:5432/memorytracker?sslmode=disable"
       - "up"
     depends_on:
       db:
