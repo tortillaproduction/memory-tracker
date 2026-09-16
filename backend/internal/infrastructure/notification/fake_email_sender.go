@@ -6,6 +6,7 @@ type SentEmail struct {
 	ToName  string
 	Subject string
 	Body    string
+	HTML    string
 }
 
 // FakeEmailSender は実際の送信を行わず、呼び出し内容をメモリ上に記録するだけの
@@ -20,11 +21,11 @@ func NewFakeEmailSender() *FakeEmailSender {
 	return &FakeEmailSender{}
 }
 
-func (s *FakeEmailSender) Send(to, toName, subject, body string) error {
+func (s *FakeEmailSender) Send(to, toName, subject, textBody, htmlBody string) error {
 	if s.SendErr != nil {
 		return s.SendErr
 	}
 
-	s.Sent = append(s.Sent, SentEmail{To: to, ToName: toName, Subject: subject, Body: body})
+	s.Sent = append(s.Sent, SentEmail{To: to, ToName: toName, Subject: subject, Body: textBody, HTML: htmlBody})
 	return nil
 }

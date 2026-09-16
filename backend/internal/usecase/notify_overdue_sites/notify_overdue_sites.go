@@ -146,8 +146,27 @@ func (uc *Usecase) sendNotification(ctx context.Context, sites []*SiteRow, now t
 	user := sites[0]
 	subject := fmt.Sprintf("::Memory Tracker:: %d site(s) are overdue for a visit", len(sites))
 
+	textBody := buildEmailText(user.UserName, sites, now)
+
+	htmlBody, err := buildEmailHTML(user.UserName, sites, now)
+	if err != nil {
+		// HTML生成に失敗してもテキストメールの送信は継続する
+		uc.logger.Error("failed to render HTML email, falling back to text-only", "error", err)
+		htmlBody = ""
+	}
+
+	if err := uc.emailSender.Send(user.UserEmail, user.UserName, subject, textBody, htmlBody); err != nil {
+		return err
+	}
+
+	// 送信成功後にnotification_logsに記録
+	return uc.saveNotificationLogs(ctx, sites, now)
+}
+
+// buildEmailText はHTMLに対応しないメールクライアント向けのプレーンテキスト版本文を組み立てる。
+func buildEmailText(userName string, sites []*SiteRow, now time.Time) string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Hi %s, \n\n", user.UserName))
+	sb.WriteString(fmt.Sprintf("Hi %s, \n\n", userName))
 	sb.WriteString("The following sites are overdue for a visit.\n")
 	sb.WriteString("Click a link to open the site and record your check-in.\n\n")
 
@@ -167,12 +186,7 @@ func (uc *Usecase) sendNotification(ctx context.Context, sites []*SiteRow, now t
 
 	sb.WriteString("--\nMemory Tracker\n")
 
-	if err := uc.emailSender.Send(user.UserEmail, user.UserName, subject, sb.String()); err != nil {
-		return err
-	}
-
-	// 送信成功後にnotification_logsに記録
-	return uc.saveNotificationLogs(ctx, sites, now)
+	return sb.String()
 }
 
 func (uc *Usecase) saveNotificationLogs(ctx context.Context, sites []*SiteRow, now time.Time) error {
