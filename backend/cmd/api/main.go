@@ -3,10 +3,13 @@ package main
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -38,7 +41,11 @@ func main() {
 	}
 	defer db.Close()
 
-	frontendURL := getEnvOrDefault("FRONTEND_URL", "http://localhost:5173")
+	frontendURL, err := normalizeFrontendURL(getEnvOrDefault("FRONTEND_URL", "http://localhost:5173"))
+	if err != nil {
+		logger.Error("invalid FRONTEND_URL", "error", err)
+		os.Exit(1)
+	}
 
 	// AUTO_MIGRATE=true(デフォルト、開発時向け)ならアプリ起動時に自動でマイグレーションを実行する。
 	// 本番運用ではdocker-compose.prod.ymlでAUTO_MIGRATE=falseにし、
@@ -117,4 +124,24 @@ func getEnvOrDefault(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// normalizeFrontendURL trims whitespace and a trailing slash, then verifies
+// the result is an absolute URL with a scheme (e.g. "https://example.com").
+// FRONTEND_URL is used both as the CORS Access-Control-Allow-Origin value
+// and the post-login OAuth redirect target, so a malformed value (such as a
+// bare domain missing "https://") must fail fast at startup rather than
+// silently breaking both at runtime.
+func normalizeFrontendURL(raw string) (string, error) {
+	trimmed := strings.TrimRight(strings.TrimSpace(raw), "/")
+
+	u, err := url.ParseRequestURI(trimmed)
+	if err != nil {
+		return "", fmt.Errorf("FRONTEND_URL %q is not a valid URL: %w", raw, err)
+	}
+	if u.Scheme == "" || u.Host == "" {
+		return "", fmt.Errorf("FRONTEND_URL %q must be an absolute URL with a scheme (e.g. https://example.com)", raw)
+	}
+
+	return trimmed, nil
 }
