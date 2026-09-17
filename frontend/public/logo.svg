@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Memory Tracker logo">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1B0F30" />
+      <stop offset="55%" stop-color="#3B1160" />
+      <stop offset="100%" stop-color="#6D28D9" />
+    </linearGradient>
+  </defs>
+
+  <rect x="10" y="10" width="492" height="492" rx="102" fill="url(#bg)" />
+
+  <path
+    d="M 345.93 156.13 A 134.4 134.4 0 1 1 166.07 156.13"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="38.4"
+    stroke-linecap="round"
+    opacity="0.92"
+  />
+  <circle cx="345.93" cy="156.13" r="26.6" fill="#C4B5FD" />
+</svg>

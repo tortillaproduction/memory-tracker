@@ -93,7 +93,7 @@ func main() {
 			getEnvOrDefault("EMAIL_FROM_ADDRESS", "onboarding@resend.dev"),
 			getEnvOrDefault("EMAIL_FROM_NAME", "Memory Tracker"),
 		)
-		notifyUC := notify_overdue_sites.NewUsecase(db, emailSender, logger)
+		notifyUC := notify_overdue_sites.NewUsecase(db, emailSender, logger, frontendURL)
 		scheduler := batch.NewNotificationScheduler(notifyUC, 15*time.Minute, logger)
 		scheduler.Start(ctx)
 	} else {

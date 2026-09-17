@@ -27,10 +27,11 @@ type Usecase struct {
 	db          *sql.DB
 	emailSender notification.EmailSender
 	logger      *slog.Logger
+	frontendURL string
 }
 
-func NewUsecase(db *sql.DB, emailSender notification.EmailSender, logger *slog.Logger) *Usecase {
-	return &Usecase{db: db, emailSender: emailSender, logger: logger}
+func NewUsecase(db *sql.DB, emailSender notification.EmailSender, logger *slog.Logger, frontendURL string) *Usecase {
+	return &Usecase{db: db, emailSender: emailSender, logger: logger, frontendURL: frontendURL}
 }
 
 // Execute は全ユーザーの全サイトを確認し、期限切れかつ未通知のサイトがあればメールを送る。
@@ -148,7 +149,7 @@ func (uc *Usecase) sendNotification(ctx context.Context, sites []*SiteRow, now t
 
 	textBody := buildEmailText(user.UserName, sites, now)
 
-	htmlBody, err := buildEmailHTML(user.UserName, sites, now)
+	htmlBody, err := buildEmailHTML(user.UserName, sites, now, uc.frontendURL)
 	if err != nil {
 		// HTML生成に失敗してもテキストメールの送信は継続する
 		uc.logger.Error("failed to render HTML email, falling back to text-only", "error", err)
