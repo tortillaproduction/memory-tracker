@@ -1,5 +1,8 @@
+// 本番ビルドでは同一オリジンの相対パスを使い、Vercelのrewrite(/api/*)経由でRenderの
+// バックエンドへプロキシする。これによりブラウザからはクロスサイト通信に見えなくなり、
+// サードパーティCookieブロックの影響を受けずにセッションCookieを送受信できる。
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
+  import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:8080');
 
 export class ApiError extends Error {
   status: number;
