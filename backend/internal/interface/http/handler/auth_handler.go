@@ -57,7 +57,7 @@ func (h *AuthHandler) LoginRedirect(w http.ResponseWriter, r *http.Request) {
 		Value:    state,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   false, // 本番環境ではtrueにする（HTTPS前提）
+		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   int((5 * time.Minute).Seconds()),
 	})
@@ -68,15 +68,13 @@ func (h *AuthHandler) LoginRedirect(w http.ResponseWriter, r *http.Request) {
 // Callback はGoogleからのリダイレクトを受け、認可コードをユーザー情報に交換した上で
 // アプリ独自のセッションを発行し、フロントエンドへリダイレクトする。
 func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
-	// ブラウザの「戻る」操作等でこのコールバックURL（使用済みのcode）が再送されることがある。
-	// Googleの認可コードは一度しか交換できないため、その場合は本来ここで
-	// トークン交換が失敗し502になってしまう。既に有効なセッションCookieがあれば
-	// 既にログイン済みとみなし、再交換せずそのままフロントエンドへ戻す。
-	if sessionCookie, err := r.Cookie(middleware.SeesionCookieName); err == nil {
-		if _, err := h.sessionStore.FindUserID(r.Context(), sessionCookie.Value); err == nil {
-			http.Redirect(w, r, h.frontendURL, http.StatusFound)
-			return
-		}
+	// ブラウザの「戻る」操作や、ほぼ同時に届く重複リクエスト等でこのコールバックURL
+	// （使用済みのcode）が再送されることがある。Googleの認可コードは一度しか交換できないため、
+	// その場合は本来ここでトークン交換が失敗し502になってしまう。既に有効なセッションCookieが
+	// あれば既にログイン済みとみなし、再交換せずそのままフロントエンドへ戻す。
+	if h.hasValidSession(r) {
+		http.Redirect(w, r, h.frontendURL, http.StatusFound)
+		return
 	}
 
 	stateCookie, err := r.Cookie(oauthStateCookieName)
@@ -93,6 +91,13 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 
 	googleUser, err := h.googleClient.ExchangeCode(r.Context(), code)
 	if err != nil {
+		// このcodeを使った別リクエストがほぼ同時に成功しセッションが発行済みの可能性がある
+		// （codeは一度しか交換できないため、片方は必ずここに来る）。その場合は502にせず
+		// ログイン成功として扱う。
+		if h.hasValidSession(r) {
+			http.Redirect(w, r, h.frontendURL, http.StatusFound)
+			return
+		}
 		h.logger.Error("failed to exchange google code", "error", err)
 		http.Error(w, "authentication failed", http.StatusBadGateway)
 		return
@@ -121,12 +126,24 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		Value:    sessionID,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   false, // 本番環境ではtrueにする
-		SameSite: http.SameSiteLaxMode,
+		Secure:   true,
+		// フロントエンド(Vercel)とバックエンド(Render)は別オリジンのため、fetchの
+		// credentials: 'include' でこのCookieを送るにはSameSite=Noneが必須（Secureとセットで有効）。
+		SameSite: http.SameSiteNoneMode,
 		MaxAge:   int(auth.SessionTTL.Seconds()),
 	})
 
 	http.Redirect(w, r, h.frontendURL, http.StatusFound)
+}
+
+// hasValidSession は現在のリクエストに有効なセッションCookieが付与されているかを判定する。
+func (h *AuthHandler) hasValidSession(r *http.Request) bool {
+	sessionCookie, err := r.Cookie(middleware.SeesionCookieName)
+	if err != nil {
+		return false
+	}
+	_, err = h.sessionStore.FindUserID(r.Context(), sessionCookie.Value)
+	return err == nil
 }
 
 // Me はフロントエンドが起動時に叩き、ログイン状態とユーザー情報を確認するためのAPI。
@@ -158,7 +175,8 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
+		Secure:   true,
+		SameSite: http.SameSiteNoneMode,
 		MaxAge:   -1,
 	})
 
