@@ -133,6 +133,10 @@ const emailHTMLTemplate = `<!DOCTYPE html>
         <!-- footer -->
         <tr>
           <td align="center" style="padding-top:24px; font-family: Arial, Helvetica, sans-serif; font-size:11.5px; line-height:1.8; color:#8A82A3;">
+            <a href="{{.PrivacyURL}}" target="_blank" style="color:#8A82A3; text-decoration:underline;">Privacy Policy</a>
+            &nbsp;&middot;&nbsp;
+            <a href="{{.TermsURL}}" target="_blank" style="color:#8A82A3; text-decoration:underline;">Terms of Service</a>
+            <br>
             &#169; {{.Year}} Memory Tracker. All rights reserved.
           </td>
         </tr>
@@ -144,16 +148,20 @@ const emailHTMLTemplate = `<!DOCTYPE html>
 </body>
 </html>`
 
-func buildEmailHTML(userName string, sites []*SiteRow, now time.Time) (string, error) {
+func buildEmailHTML(userName string, sites []*SiteRow, now time.Time, frontendURL string) (string, error) {
 	data := struct {
-		UserName  string
-		Sites     []emailSiteView
-		SiteCount int
-		Year      int
+		UserName   string
+		Sites      []emailSiteView
+		SiteCount  int
+		Year       int
+		PrivacyURL string
+		TermsURL   string
 	}{
-		UserName:  userName,
-		SiteCount: len(sites),
-		Year:      now.Year(),
+		UserName:   userName,
+		SiteCount:  len(sites),
+		Year:       now.Year(),
+		PrivacyURL: frontendURL + "/privacy",
+		TermsURL:   frontendURL + "/terms",
 	}
 
 	for _, s := range sites {

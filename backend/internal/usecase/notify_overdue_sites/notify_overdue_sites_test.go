@@ -140,7 +140,7 @@ var _ = Describe("短期限バッチによる期限切れ通知", func() {
 		insertCheckIn(ctx, userID, siteID, now.Add(-2*time.Hour), false) // 本チェックイン(2時間前、期限は1時間)
 
 		sender := notification.NewFakeEmailSender()
-		uc := notify_overdue_sites.NewUsecase(db, sender, slog.Default())
+		uc := notify_overdue_sites.NewUsecase(db, sender, slog.Default(), "https://example.com")
 
 		Expect(uc.Execute(ctx)).To(Succeed())
 
@@ -163,7 +163,7 @@ var _ = Describe("短期限バッチによる期限切れ通知", func() {
 		insertCheckIn(ctx, userID, siteID, now.Add(-2*time.Hour), true) // 初回チェックインのみ、2時間前
 
 		sender := notification.NewFakeEmailSender()
-		uc := notify_overdue_sites.NewUsecase(db, sender, slog.Default())
+		uc := notify_overdue_sites.NewUsecase(db, sender, slog.Default(), "https://example.com")
 
 		Expect(uc.Execute(ctx)).To(Succeed())
 
@@ -180,7 +180,7 @@ var _ = Describe("短期限バッチによる期限切れ通知", func() {
 		insertCheckIn(ctx, userID, siteID, now.Add(-1*time.Hour), false) // 1時間前、期限は24時間
 
 		sender := notification.NewFakeEmailSender()
-		uc := notify_overdue_sites.NewUsecase(db, sender, slog.Default())
+		uc := notify_overdue_sites.NewUsecase(db, sender, slog.Default(), "https://example.com")
 
 		Expect(uc.Execute(ctx)).To(Succeed())
 		Expect(sender.Sent).To(BeEmpty())
@@ -196,7 +196,7 @@ var _ = Describe("短期限バッチによる期限切れ通知", func() {
 		insertNotificationLog(ctx, userID, siteID, now.Add(-30*time.Minute))
 
 		sender := notification.NewFakeEmailSender()
-		uc := notify_overdue_sites.NewUsecase(db, sender, slog.Default())
+		uc := notify_overdue_sites.NewUsecase(db, sender, slog.Default(), "https://example.com")
 
 		Expect(uc.Execute(ctx)).To(Succeed())
 		Expect(sender.Sent).To(BeEmpty())
