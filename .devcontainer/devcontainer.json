@@ -6,8 +6,9 @@
 	"image": "mcr.microsoft.com/devcontainers/go:2-1.27-trixie",
 	"features": {
 		"ghcr.io/devcontainers/features/github-cli:1": {},
-		"ghcr.io/devcontainers/features/node:2": {}
-	}
+		"ghcr.io/devcontainers/features/node:2": {},
+		"ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+	},
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	// "features": {},
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
@@ -15,7 +16,26 @@
 	// Use 'postCreateCommand' to run commands after the container is created.
 	// "postCreateCommand": "go version",
 	// Configure tool-specific properties.
-	// "customizations": {},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"anthropic.claude-code",
+				"dbaeumer.vscode-eslint",
+				"golang.go",
+				"esbenp.prettier-vscode",
+				"ms-vscode-remote.remote-wsl",
+				"Cardinal90.multi-cursor-case-preserve",
+				"redhat.vscode-yaml",
+				"Codeium.codeium",
+				"bradlc.vscode-tailwindcss",
+				"yzhang.markdown-all-in-one",
+				"naumovs.color-highlight",
+				"GitHub.codespaces",
+				"mightbesimon.emoji-icons",
+				"burkeholland.simple-react-snippets"
+			]
+		}
+	}
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
 	// "remoteUser": "root"
 }
