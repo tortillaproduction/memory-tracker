@@ -9,12 +9,16 @@ type GoogleSignInButtonProps = {
 };
 
 /**
- * "Sign in with Google" button, permanently fixed to Google's official Dark theme.
+ * "Sign in with Google" button, permanently fixed to Google's official Light theme.
  *
  * This intentionally does NOT use daisyUI theme tokens (btn, text-base-content, bg-base-100, ...)
  * because Google's branding guidelines mandate an exact, non-adaptive color scheme. This button
  * must look identical regardless of which of the app's daisyUI themes (see ThemeSwitcher.tsx)
  * is active — do not restyle it to match the page.
+ *
+ * Sizing (height, padding, logo/text gap) follows Google's minimum spec exactly — do not shrink
+ * it further. Use `className` to keep the button at its intrinsic (content-hugging) width
+ * instead of stretching it, rather than reducing the padding below spec.
  */
 export default function GoogleSignInButton({
   onClick,
@@ -28,12 +32,12 @@ export default function GoogleSignInButton({
       className={[
         'inline-flex items-center justify-center gap-x-[10px]',
         'h-[40px] px-3 rounded-[4px]',
-        'border border-solid border-[#8E918F] bg-[#131314] text-[#E3E3E3]',
+        'border border-solid border-[#747775] bg-white text-[#1F1F1F]',
         'text-[14px] leading-[20px] font-medium tracking-[0.25px]',
         'cursor-pointer select-none transition-colors duration-150',
-        'hover:bg-[#1a1a1b] hover:border-[#9aa0a6]',
-        'active:bg-[#282a2c]',
-        'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8ab4f8]',
+        'hover:bg-[#F8FAFD] hover:border-[#747775]',
+        'active:bg-[#EAF1FD]',
+        'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1A73E8]',
         className,
       ].join(' ')}
       style={{ fontFamily: "'Google Sans', Roboto, Arial, sans-serif" }}

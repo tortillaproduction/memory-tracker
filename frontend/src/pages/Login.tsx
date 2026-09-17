@@ -30,7 +30,7 @@ export default function Login() {
           >
             before forget
           </p>
-          <GoogleSignInButton onClick={redirectToGoogleLogin} className="w-full mb-5" />
+          <GoogleSignInButton onClick={redirectToGoogleLogin} className="mb-5" />
         </div>
       </div>
     </div>
