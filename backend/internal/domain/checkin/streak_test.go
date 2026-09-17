@@ -39,7 +39,7 @@ var _ = Describe("CalculateUserStreak", func() {
 var _ = Describe("CalculateSiteStreak", func() {
 	It("returns 0 when the latest check-in is already overdue", func() {
 		now := time.Date(2026, 9, 2, 10, 0, 0, 0, time.UTC)
-		overdueCheckIn := checkin.NewCheckIn("c1", user.ID("u1"), site.ID("s1"))
+		overdueCheckIn := checkin.Reconstruct("c1", user.ID("u1"), site.ID("s1"), now, false)
 		streak := checkin.CalculateSiteStreak([]*checkin.CheckIn{overdueCheckIn}, 24, now.Add(48*time.Hour))
 		Expect(streak).To(Equal(0))
 	})
