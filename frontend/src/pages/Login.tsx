@@ -30,6 +30,12 @@ export default function Login() {
           >
             before forget
           </p>
+          <p
+            className="text-base-content/50 text-sm max-w-xs mt-3 mb-2"
+            style={{ textShadow: '1px 1px 2px rgba(0, 0, 0, 0.6)' }}
+          >
+            Memory Trackerは、登録したサイトを一定期間開かないと、リマインドメールでお知らせするサービスです。
+          </p>
           <GoogleSignInButton onClick={redirectToGoogleLogin} className="mb-5" />
         </div>
       </div>
