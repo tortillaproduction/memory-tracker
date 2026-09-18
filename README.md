@@ -9,7 +9,8 @@
 - **DB**: PostgreSQL
 - **API**: REST（gRPCは今回のスコープではオーバースペックのため見送り）
 - **認証**: Google OAuth + Cookieベースセッション
-- **通知**: メール（SendGrid）、LINE（Phase 2、UI上は現状トグルをグレーアウト）
+- **通知**: メール（Resend）、ブラウザ通知（Web Push、PWAインストール時）、LINE（Phase 2、UI上は現状トグルをグレーアウト）
+- **PWA**: `vite-plugin-pwa`（Service Worker、installable manifest）
 
 ## ディレクトリ構成
 
@@ -107,10 +108,41 @@ EMAIL_FROM_NAME=Memory Tracker
     ↓
 期限切れ かつ 前回通知からinterval_hours以上経過 のサイトを検出
     ↓
-ユーザーごとにまとめて1通送信（複数サイトが期限切れでも1メール）
+ユーザーごとにまとめて通知（複数サイトが期限切れでも1回にまとめる）
+    ↓
+有効なプッシュ購読があればプッシュを優先、無ければ（または設定次第で）メールを送信
     ↓
 notification_logsに記録（二重送信防止）
 ```
+
+## ブラウザ通知（Web Push / PWA）の設定
+
+アプリをホーム画面にインストール（PWA化）すると、期限切れサイトの通知をブラウザ通知（Web Push）で受け取れます。
+
+**通知チャネルの自動切替（二重通知の防止）**
+
+ブラウザで使う場合は従来通りメール通知のみですが、インストールしてブラウザ通知を有効にした場合にメールと二重に届くと煩わしいため、以下のポリシーで自動的に切り替えます。
+
+- 有効なプッシュ購読があれば、その端末にはプッシュ通知のみを送信し、メールは送りません（デフォルト）。
+- プッシュの購読が失効している場合（ブラウザ側で通知を許可解除した場合など）は、送信時に自動検知して購読情報を削除し、同じタイミングでメール通知にフォールバックします（手動での切り戻し操作は不要）。
+- 設定画面（ナビバーのユーザーメニュー）の「Turn off email when push is available」トグルをオフにすると、プッシュとメールを両方受け取ることもできます。
+
+**VAPID鍵の設定**
+
+Web Pushの送信にはVAPID（Voluntary Application Server Identification）鍵ペアが必要です。
+
+1. VAPID鍵ペアを生成する（`webpush-go`同梱のCLIか、[web-push](https://www.npmjs.com/package/web-push)などのツールを利用）
+2. `.env`に設定する
+
+```env
+VAPID_PUBLIC_KEY=xxxxxxxxxxxx
+VAPID_PRIVATE_KEY=xxxxxxxxxxxx
+VAPID_SUBJECT=mailto:support@example.com
+```
+
+**`VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`が未設定の場合**: プッシュ送信は自動的に無効化され、購読・設定APIやメール通知バッチは通常通り動作します（開発時は鍵なしで起動できます）。
+
+**ローカルでのプッシュ通知確認**: `localhost`はセキュアコンテキストとして扱われるため、ブラウザでの購読からバックエンドからの実際のプッシュ送信まで、トンネルなしでローカル完結して確認できます。インストールプロンプトのスマートフォン実機確認にはHTTPSが必要なため、Vercelのプレビューデプロイ等を利用してください。
 
 ## 本番デプロイ
 
@@ -138,6 +170,7 @@ notification_logsに記録（二重送信防止）
    - `GOOGLE_REDIRECT_URL`: `https://<Renderのバックエンドドメイン>/api/auth/google/callback`
    - `SESSION_SECRET`: 開発用とは別に新規生成した強い値
    - `RESEND_API_KEY` / `EMAIL_FROM_ADDRESS`（独自ドメイン認証後のアドレス） / `EMAIL_FROM_NAME`
+   - `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT`（本番用に新規生成した鍵ペア。ブラウザ通知を使う場合のみ必須）
 3. Pre-Deploy Command にマイグレーション実行コマンドを設定し、アプリ起動前に一度だけ適用されるようにする（`docker-compose.prod.yml` の `migrate` サービスと同じ考え方）:
    ```bash
    migrate -path ./migrations -database "$DATABASE_URL" up
@@ -195,7 +228,8 @@ make test
 - [x] マイグレーション自動化（開発時: main.go起動時に自動実行 / 本番相当: 専用migrateコンテナで事前実行）
 - [x] サイト一覧取得API（`GET /api/sites`）とフロントの実データ反映
 - [x] ストリーク計算・ダッシュボード表示（ユーザー全体 / サイト別）
-- [x] メール通知バッチ（SendGrid、15分ごとに期限切れサイトを検出・通知）
+- [x] メール通知バッチ（Resend、15分ごとに期限切れサイトを検出・通知）
+- [x] PWA化・ブラウザ通知（Web Push、購読状況に応じてメールと自動的に切り替え）
 - [ ] LINE通知（UIはトグル用意、実装完了までグレーアウト）
 - [ ] Stripe連携（Phase 2、`plan_type`と`subscriptions`テーブルは用意済み）
 
