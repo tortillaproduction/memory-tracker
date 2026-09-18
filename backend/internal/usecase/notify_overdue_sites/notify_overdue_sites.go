@@ -147,7 +147,7 @@ func (uc *Usecase) sendNotification(ctx context.Context, sites []*SiteRow, now t
 	user := sites[0]
 	subject := fmt.Sprintf("::Memory Tracker:: %d site(s) are overdue for a visit", len(sites))
 
-	textBody := buildEmailText(user.UserName, sites, now)
+	textBody := buildEmailText(user.UserName, sites, now, uc.frontendURL)
 
 	htmlBody, err := buildEmailHTML(user.UserName, sites, now, uc.frontendURL)
 	if err != nil {
@@ -165,7 +165,7 @@ func (uc *Usecase) sendNotification(ctx context.Context, sites []*SiteRow, now t
 }
 
 // buildEmailText はHTMLに対応しないメールクライアント向けのプレーンテキスト版本文を組み立てる。
-func buildEmailText(userName string, sites []*SiteRow, now time.Time) string {
+func buildEmailText(userName string, sites []*SiteRow, now time.Time, frontendURL string) string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Hi %s, \n\n", userName))
 	sb.WriteString("The following sites are overdue for a visit.\n")
@@ -180,9 +180,10 @@ func buildEmailText(userName string, sites []*SiteRow, now time.Time) string {
 			sb.WriteString(fmt.Sprintf("   Not visited yet (interval: %d hours)\n", s.IntervalHours))
 		}
 
-		// バックエンド経由リンク（クリックでチェックイン記録＋リダイレクト）
-		// ※フロントエンドではなくバックエンドのURLを使う
-		sb.WriteString(fmt.Sprintf("   -> %s\n\n", s.SiteURL))
+		// /go/{siteId} 経由リンク（クリックでチェックイン記録＋実サイトへリダイレクト）
+		// s.SiteURLを直接貼ると経由せずに開けてしまいチェックインが記録されないため、
+		// 必ずこのリンクを使うこと。
+		sb.WriteString(fmt.Sprintf("   -> %s/go/%s\n\n", frontendURL, s.SiteID))
 	}
 
 	sb.WriteString("--\nMemory Tracker\n")

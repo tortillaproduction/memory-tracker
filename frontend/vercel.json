@@ -1,6 +1,7 @@
 {
   "rewrites": [
     { "source": "/api/(.*)", "destination": "https://memory-tracker-lamg.onrender.com/api/$1" },
+    { "source": "/go/(.*)", "destination": "https://memory-tracker-lamg.onrender.com/go/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
