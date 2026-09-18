@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  getNotificationPreferences,
-  getVapidPublicKey,
-  subscribePush,
-  unsubscribePush,
-  updateNotificationPreferences,
-} from '../api/push';
+import { getVapidPublicKey, subscribePush, unsubscribePush } from '../api/push';
+
+export type NotificationChannel = 'email' | 'push';
 
 // VAPID公開鍵(base64url)をpushManager.subscribeが要求するUint8Arrayに変換する。
 function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
@@ -21,7 +16,10 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
 }
 
 export function usePushSubscription(enabled: boolean) {
-  const queryClient = useQueryClient();
+  // Push APIの有無はブラウザ/OSで異なる: Chrome/Edge/Firefoxはブラウザタブのままでも
+  // trueになるが、iOS SafariはPWAとしてインストールするまでPushManagerが存在しないため
+  // falseのままになる。「インストール済みかどうか」を別途判定しなくても、この1つの
+  // フラグだけでUIの有効/無効を正しく出し分けられる。
   const [isSupported] = useState(
     () =>
       'serviceWorker' in navigator &&
@@ -32,12 +30,6 @@ export function usePushSubscription(enabled: boolean) {
     null,
   );
   const [isBusy, setIsBusy] = useState(false);
-
-  const preferencesQuery = useQuery({
-    queryKey: ['notificationPreferences'],
-    queryFn: getNotificationPreferences,
-    enabled,
-  });
 
   useEffect(() => {
     if (!isSupported || !enabled) return;
@@ -61,13 +53,10 @@ export function usePushSubscription(enabled: boolean) {
       });
       await subscribePush(sub.toJSON() as PushSubscriptionJSON);
       setSubscription(sub);
-      await queryClient.invalidateQueries({
-        queryKey: ['notificationPreferences'],
-      });
     } finally {
       setIsBusy(false);
     }
-  }, [queryClient]);
+  }, []);
 
   const unsubscribe = useCallback(async () => {
     if (!subscription) return;
@@ -76,31 +65,22 @@ export function usePushSubscription(enabled: boolean) {
       await unsubscribePush(subscription.endpoint);
       await subscription.unsubscribe();
       setSubscription(null);
-      await queryClient.invalidateQueries({
-        queryKey: ['notificationPreferences'],
-      });
     } finally {
       setIsBusy(false);
     }
-  }, [subscription, queryClient]);
+  }, [subscription]);
 
-  const setDisableEmailWhenPushAvailable = useCallback(
-    async (value: boolean) => {
-      await updateNotificationPreferences(value);
-      await queryClient.invalidateQueries({
-        queryKey: ['notificationPreferences'],
-      });
-    },
-    [queryClient],
+  // メール/プッシュの二択スライド用。'push'を選ぶと購読、'email'を選ぶと解除する。
+  const selectChannel = useCallback(
+    (channel: NotificationChannel) =>
+      channel === 'push' ? subscribe() : unsubscribe(),
+    [subscribe, unsubscribe],
   );
 
   return {
     isSupported,
-    isSubscribed: !!subscription,
     isBusy,
-    preferences: preferencesQuery.data,
-    subscribe,
-    unsubscribe,
-    setDisableEmailWhenPushAvailable,
+    channel: (subscription ? 'push' : 'email') as NotificationChannel,
+    selectChannel,
   };
 }
