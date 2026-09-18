@@ -174,9 +174,9 @@ func buildEmailHTML(userName string, sites []*SiteRow, now time.Time, frontendUR
 		}
 		data.Sites = append(data.Sites, emailSiteView{
 			Name: s.SiteName,
-			// /go/{siteId} 経由でチェックインを記録してから実サイトへリダイレクトする。
+			// s.CheckinURLはワンタイムトークン付きの/go/{siteId}リンク。
 			// s.SiteURLを直接使うと経由せずに開けてしまいチェックインが記録されない。
-			URL:         fmt.Sprintf("%s/go/%s", frontendURL, s.SiteID),
+			URL:         s.CheckinURL,
 			StatusLabel: status,
 		})
 	}

@@ -15,14 +15,15 @@ import (
 )
 
 type Dependencies struct {
-	RegisterSiteUsecase *register_site.Usecase
-	ListSiteUsecase     *list_sites.Usecase
-	DeleteSiteUsecase   *delete_site.Usecase
-	CheckinSiteUsecase  *checkin_site.Usecase
-	AuthHandler         *handler.AuthHandler
-	SessionStore        *auth.SessionStore
-	FrontendURL         string
-	Logger              *slog.Logger
+	RegisterSiteUsecase  *register_site.Usecase
+	ListSiteUsecase      *list_sites.Usecase
+	DeleteSiteUsecase    *delete_site.Usecase
+	CheckinSiteUsecase   *checkin_site.Usecase
+	AuthHandler          *handler.AuthHandler
+	SessionStore         *auth.SessionStore
+	CheckinTokenVerifier middleware.CheckinTokenVerifier
+	FrontendURL          string
+	Logger               *slog.Logger
 }
 
 func NewRouter(deps Dependencies) http.Handler {
@@ -47,7 +48,8 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.Handle("GET /api/sites", requireAuth(http.HandlerFunc(siteHandler.List)))
 	mux.Handle("POST /api/sites", requireAuth(http.HandlerFunc(siteHandler.Register)))
 	mux.Handle("DELETE /api/sites/{siteId}", requireAuth(http.HandlerFunc(siteHandler.Delete)))
-	mux.Handle("GET /go/{siteId}", requireAuth(http.HandlerFunc(checkinHandler.CheckInAndRedirect)))
+	requireAuthOrCheckinToken := middleware.RequireAuthOrCheckinToken(deps.SessionStore, deps.CheckinTokenVerifier)
+	mux.Handle("GET /go/{siteId}", requireAuthOrCheckinToken(http.HandlerFunc(checkinHandler.CheckInAndRedirect)))
 
 	return withRecover(deps.Logger, withCORS(deps.FrontendURL, mux))
 }

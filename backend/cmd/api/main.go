@@ -47,6 +47,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	// SESSION_SECRETはメールのチェックインリンク(/go/{siteId}?token=...)の署名鍵として使う。
+	// この値が漏洩・推測可能だと誰でもチェックイントークンを偽造できてしまうため、
+	// 空文字のまま起動することを許さない。
+	sessionSecret := os.Getenv("SESSION_SECRET")
+	if sessionSecret == "" {
+		logger.Error("SESSION_SECRET must be set")
+		os.Exit(1)
+	}
+
 	// AUTO_MIGRATE=true(デフォルト、開発時向け)ならアプリ起動時に自動でマイグレーションを実行する。
 	// 本番運用ではdocker-compose.prod.ymlでAUTO_MIGRATE=falseにし、
 	// 専用のmigrateコンテナで事前に1回だけ明示的に実行する運用に切り替える想定。
@@ -67,6 +76,7 @@ func main() {
 	notificationRepo := pg.NewNotificationRepository(db)
 
 	sessionStore := infraauth.NewSessionStore(db)
+	checkinTokenIssuer := infraauth.NewCheckinTokenIssuer(sessionSecret)
 	googleClient := infraauth.NewGoogleOAuthClient(
 		os.Getenv("GOOGLE_CLIENT_ID"),
 		os.Getenv("GOOGLE_CLIENT_SECRET"),
@@ -93,7 +103,7 @@ func main() {
 			getEnvOrDefault("EMAIL_FROM_ADDRESS", "onboarding@resend.dev"),
 			getEnvOrDefault("EMAIL_FROM_NAME", "Memory Tracker"),
 		)
-		notifyUC := notify_overdue_sites.NewUsecase(db, emailSender, logger, frontendURL)
+		notifyUC := notify_overdue_sites.NewUsecase(db, emailSender, logger, frontendURL, checkinTokenIssuer)
 		scheduler := batch.NewNotificationScheduler(notifyUC, 15*time.Minute, logger)
 		scheduler.Start(ctx)
 	} else {
@@ -101,14 +111,15 @@ func main() {
 	}
 
 	router := httpinterface.NewRouter(httpinterface.Dependencies{
-		RegisterSiteUsecase: registerSiteUC,
-		ListSiteUsecase:     listSitesUC,
-		DeleteSiteUsecase:   deleteSiteUC,
-		CheckinSiteUsecase:  checkinSiteUC,
-		AuthHandler:         authHandler,
-		SessionStore:        sessionStore,
-		FrontendURL:         frontendURL,
-		Logger:              logger,
+		RegisterSiteUsecase:  registerSiteUC,
+		ListSiteUsecase:      listSitesUC,
+		DeleteSiteUsecase:    deleteSiteUC,
+		CheckinSiteUsecase:   checkinSiteUC,
+		AuthHandler:          authHandler,
+		SessionStore:         sessionStore,
+		CheckinTokenVerifier: checkinTokenIssuer,
+		FrontendURL:          frontendURL,
+		Logger:               logger,
 	})
 
 	addr := ":8080"

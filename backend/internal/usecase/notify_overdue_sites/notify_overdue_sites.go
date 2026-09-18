@@ -5,11 +5,18 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"strings"
 	"time"
 
+	"github.com/tortillaproduction/memory-tracker/internal/domain/site"
+	"github.com/tortillaproduction/memory-tracker/internal/domain/user"
 	"github.com/tortillaproduction/memory-tracker/internal/infrastructure/notification"
 )
+
+// checkinLinkTTL はメールに埋め込むチェックインリンクの有効期限。
+// この期間を過ぎたリンクを踏んでもチェックインは記録されない。
+const checkinLinkTTL = 7 * 24 * time.Hour
 
 // SiteRow はバッチで使うサイト情報の最小DTO。
 type SiteRow struct {
@@ -21,6 +28,14 @@ type SiteRow struct {
 	UserEmail     string
 	UserName      string
 	LastCheckedAt *time.Time // is_initial=falseの最終チェックイン。nilは一度も開いていない。
+	CheckinURL    string     // /go/{siteId}?token=... 送信直前にセットする
+}
+
+// TokenIssuer はメールのチェックインリンクに埋め込む、Cookie不要のワンタイム
+// トークンを発行する。スマホのメールアプリはアプリ内WebViewで開くことが多く、
+// ログイン中のブラウザとセッションCookieが共有されないための対応。
+type TokenIssuer interface {
+	IssueCheckinToken(userID user.ID, siteID site.ID, expiresAt time.Time) (string, error)
 }
 
 type Usecase struct {
@@ -28,10 +43,11 @@ type Usecase struct {
 	emailSender notification.EmailSender
 	logger      *slog.Logger
 	frontendURL string
+	tokenIssuer TokenIssuer
 }
 
-func NewUsecase(db *sql.DB, emailSender notification.EmailSender, logger *slog.Logger, frontendURL string) *Usecase {
-	return &Usecase{db: db, emailSender: emailSender, logger: logger, frontendURL: frontendURL}
+func NewUsecase(db *sql.DB, emailSender notification.EmailSender, logger *slog.Logger, frontendURL string, tokenIssuer TokenIssuer) *Usecase {
+	return &Usecase{db: db, emailSender: emailSender, logger: logger, frontendURL: frontendURL, tokenIssuer: tokenIssuer}
 }
 
 // Execute は全ユーザーの全サイトを確認し、期限切れかつ未通知のサイトがあればメールを送る。
@@ -144,19 +160,23 @@ func (uc *Usecase) fetchOverdueSites(ctx context.Context, now time.Time) ([]*Sit
 }
 
 func (uc *Usecase) sendNotification(ctx context.Context, sites []*SiteRow, now time.Time) error {
-	user := sites[0]
+	owner := sites[0]
 	subject := fmt.Sprintf("::Memory Tracker:: %d site(s) are overdue for a visit", len(sites))
 
-	textBody := buildEmailText(user.UserName, sites, now, uc.frontendURL)
+	if err := uc.issueCheckinLinks(sites, now); err != nil {
+		return fmt.Errorf("issue checkin links: %w", err)
+	}
 
-	htmlBody, err := buildEmailHTML(user.UserName, sites, now, uc.frontendURL)
+	textBody := buildEmailText(owner.UserName, sites, now)
+
+	htmlBody, err := buildEmailHTML(owner.UserName, sites, now, uc.frontendURL)
 	if err != nil {
 		// HTML生成に失敗してもテキストメールの送信は継続する
 		uc.logger.Error("failed to render HTML email, falling back to text-only", "error", err)
 		htmlBody = ""
 	}
 
-	if err := uc.emailSender.Send(user.UserEmail, user.UserName, subject, textBody, htmlBody); err != nil {
+	if err := uc.emailSender.Send(owner.UserEmail, owner.UserName, subject, textBody, htmlBody); err != nil {
 		return err
 	}
 
@@ -164,8 +184,22 @@ func (uc *Usecase) sendNotification(ctx context.Context, sites []*SiteRow, now t
 	return uc.saveNotificationLogs(ctx, sites, now)
 }
 
+// issueCheckinLinks は各サイトについてチェックイン用ワンタイムトークンを発行し、
+// SiteRow.CheckinURLにセットする。
+func (uc *Usecase) issueCheckinLinks(sites []*SiteRow, now time.Time) error {
+	expiresAt := now.Add(checkinLinkTTL)
+	for _, s := range sites {
+		token, err := uc.tokenIssuer.IssueCheckinToken(user.ID(s.UserID), site.ID(s.SiteID), expiresAt)
+		if err != nil {
+			return err
+		}
+		s.CheckinURL = fmt.Sprintf("%s/go/%s?token=%s", uc.frontendURL, s.SiteID, url.QueryEscape(token))
+	}
+	return nil
+}
+
 // buildEmailText はHTMLに対応しないメールクライアント向けのプレーンテキスト版本文を組み立てる。
-func buildEmailText(userName string, sites []*SiteRow, now time.Time, frontendURL string) string {
+func buildEmailText(userName string, sites []*SiteRow, now time.Time) string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Hi %s, \n\n", userName))
 	sb.WriteString("The following sites are overdue for a visit.\n")
@@ -180,10 +214,10 @@ func buildEmailText(userName string, sites []*SiteRow, now time.Time, frontendUR
 			sb.WriteString(fmt.Sprintf("   Not visited yet (interval: %d hours)\n", s.IntervalHours))
 		}
 
-		// /go/{siteId} 経由リンク（クリックでチェックイン記録＋実サイトへリダイレクト）
+		// s.CheckinURLはワンタイムトークン付きの/go/{siteId}リンク。
 		// s.SiteURLを直接貼ると経由せずに開けてしまいチェックインが記録されないため、
-		// 必ずこのリンクを使うこと。
-		sb.WriteString(fmt.Sprintf("   -> %s/go/%s\n\n", frontendURL, s.SiteID))
+		// 必ずこちらを使うこと。
+		sb.WriteString(fmt.Sprintf("   -> %s\n\n", s.CheckinURL))
 	}
 
 	sb.WriteString("--\nMemory Tracker\n")
