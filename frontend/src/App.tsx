@@ -94,50 +94,69 @@ function App() {
                           Notifications
                         </li>
                         <li>
-                          <button
-                            onClick={() => push.subscribe()}
-                            disabled={push.isBusy}
+                          <div
+                            className={
+                              !push.isSupported
+                                ? 'tooltip tooltip-left'
+                                : undefined
+                            }
+                            data-tip={
+                              !push.isSupported
+                                ? 'Install the app to enable push notifications'
+                                : undefined
+                            }
                           >
-                            {push.isSubscribed
-                              ? 'Browser notifications: on'
-                              : 'Enable browser notifications'}
-                          </button>
-                        </li>
-                        {push.isSubscribed && (
-                          <>
-                            <li>
-                              <button
-                                onClick={() => push.unsubscribe()}
-                                disabled={push.isBusy}
+                            <div className="flex items-center justify-between gap-2 px-2 py-1">
+                              <span
+                                className={
+                                  push.channel === 'email'
+                                    ? 'font-semibold'
+                                    : 'text-base-content/50'
+                                }
                               >
-                                Turn off browser notifications
-                              </button>
-                            </li>
-                            <li>
-                              <label className="flex items-center justify-between gap-2 cursor-pointer">
-                                <span>
-                                  Turn off email when push is available
-                                </span>
-                                <input
-                                  type="checkbox"
-                                  className="toggle toggle-sm toggle-primary"
-                                  checked={
-                                    push.preferences
-                                      ?.disableEmailWhenPushAvailable ?? true
-                                  }
-                                  onChange={(e) =>
-                                    push.setDisableEmailWhenPushAvailable(
-                                      e.target.checked,
-                                    )
-                                  }
-                                />
-                              </label>
-                            </li>
-                          </>
-                        )}
+                                Email
+                              </span>
+                              <input
+                                type="checkbox"
+                                className="toggle toggle-sm toggle-primary"
+                                checked={push.channel === 'push'}
+                                disabled={!push.isSupported || push.isBusy}
+                                onChange={(e) =>
+                                  push.selectChannel(
+                                    e.target.checked ? 'push' : 'email',
+                                  )
+                                }
+                              />
+                              <span
+                                className={
+                                  push.channel === 'push'
+                                    ? 'font-semibold'
+                                    : 'text-base-content/50'
+                                }
+                              >
+                                Push
+                              </span>
+                            </div>
+                          </div>
+                        </li>
                         {!install.isInstalled && install.canPrompt && (
                           <li>
                             <button onClick={() => install.promptInstall()}>
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className="w-4 h-4"
+                                aria-hidden="true"
+                              >
+                                <path d="M12 3v12" />
+                                <path d="M7 10l5 5 5-5" />
+                                <path d="M5 21h14" />
+                              </svg>
                               Install app
                             </button>
                           </li>
