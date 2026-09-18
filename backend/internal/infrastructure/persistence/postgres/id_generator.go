@@ -32,3 +32,7 @@ func (g *ULIDGenerator) NewUserID() user.ID {
 func (g *ULIDGenerator) NewNotificationSettingID() notification.ID {
 	return notification.ID(ulid.Make().String())
 }
+
+func (g *ULIDGenerator) NewPushSubscriptionID() notification.SubscriptionID {
+	return notification.SubscriptionID(ulid.Make().String())
+}

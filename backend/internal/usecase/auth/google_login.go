@@ -24,11 +24,11 @@ type IDGenerator interface {
 
 type Usecase struct {
 	userRepo         domainUser.Repository
-	notificationRepo domainNotification.Repository
+	notificationRepo domainNotification.SettingRepository
 	idGenerator      IDGenerator
 }
 
-func NewUsecase(userRepo domainUser.Repository, notificationRepo domainNotification.Repository, idGen IDGenerator) *Usecase {
+func NewUsecase(userRepo domainUser.Repository, notificationRepo domainNotification.SettingRepository, idGen IDGenerator) *Usecase {
 	return &Usecase{userRepo: userRepo, notificationRepo: notificationRepo, idGenerator: idGen}
 }
 

@@ -3,10 +3,16 @@ module github.com/tortillaproduction/memory-tracker
 go 1.24.0
 
 require (
+	github.com/SherClockHolmes/webpush-go v1.4.0
 	github.com/lib/pq v1.10.9
 	github.com/oklog/ulid/v2 v2.1.0
 	github.com/onsi/ginkgo/v2 v2.20.0
 	github.com/onsi/gomega v1.34.1
+)
+
+require (
+	github.com/golang-jwt/jwt/v5 v5.2.1 // indirect
+	golang.org/x/crypto v0.45.0 // indirect
 )
 
 require (

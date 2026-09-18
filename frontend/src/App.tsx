@@ -9,10 +9,14 @@ import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
+import { usePushSubscription } from './hooks/usePushSubscription';
+import { useInstallPrompt } from './hooks/useInstallPrompt';
 
 function App() {
   const { user, isLoading, isAuthenticated, logout } = useAuth();
   const { showToast } = useToast();
+  const push = usePushSubscription(isAuthenticated);
+  const install = useInstallPrompt();
 
   // ログイン/ログアウトはページ全体のリロードを伴うため、直前にsessionStorageへ
   // 立てておいたフラグをマウント時に確認し、あれば一度だけトースト表示する。
@@ -86,6 +90,58 @@ function App() {
                         <li className="menu-title text-xs px-2 py-1 truncate">
                           {user.name}
                         </li>
+                        <li className="menu-title text-xs px-2 py-1">
+                          Notifications
+                        </li>
+                        <li>
+                          <button
+                            onClick={() => push.subscribe()}
+                            disabled={push.isBusy}
+                          >
+                            {push.isSubscribed
+                              ? 'Browser notifications: on'
+                              : 'Enable browser notifications'}
+                          </button>
+                        </li>
+                        {push.isSubscribed && (
+                          <>
+                            <li>
+                              <button
+                                onClick={() => push.unsubscribe()}
+                                disabled={push.isBusy}
+                              >
+                                Turn off browser notifications
+                              </button>
+                            </li>
+                            <li>
+                              <label className="flex items-center justify-between gap-2 cursor-pointer">
+                                <span>
+                                  Turn off email when push is available
+                                </span>
+                                <input
+                                  type="checkbox"
+                                  className="toggle toggle-sm toggle-primary"
+                                  checked={
+                                    push.preferences
+                                      ?.disableEmailWhenPushAvailable ?? true
+                                  }
+                                  onChange={(e) =>
+                                    push.setDisableEmailWhenPushAvailable(
+                                      e.target.checked,
+                                    )
+                                  }
+                                />
+                              </label>
+                            </li>
+                          </>
+                        )}
+                        {!install.isInstalled && install.canPrompt && (
+                          <li>
+                            <button onClick={() => install.promptInstall()}>
+                              Install app
+                            </button>
+                          </li>
+                        )}
                         <li>
                           <button onClick={() => logout()}>logout</button>
                         </li>

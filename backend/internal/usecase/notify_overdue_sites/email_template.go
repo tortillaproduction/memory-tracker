@@ -165,19 +165,12 @@ func buildEmailHTML(userName string, sites []*SiteRow, now time.Time, frontendUR
 	}
 
 	for _, s := range sites {
-		var status string
-		if s.LastCheckedAt != nil {
-			hours := now.Sub(*s.LastCheckedAt).Hours()
-			status = fmt.Sprintf("last checked %.0fh ago - every %dh", hours, s.IntervalHours)
-		} else {
-			status = fmt.Sprintf("not checked yet - every %dh", s.IntervalHours)
-		}
 		data.Sites = append(data.Sites, emailSiteView{
 			Name: s.SiteName,
 			// s.CheckinURLはワンタイムトークン付きの/go/{siteId}リンク。
 			// s.SiteURLを直接使うと経由せずに開けてしまいチェックインが記録されない。
 			URL:         s.CheckinURL,
-			StatusLabel: status,
+			StatusLabel: statusLabel(s, now),
 		})
 	}
 
