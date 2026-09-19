@@ -12,6 +12,12 @@ export default defineConfig({
       srcDir: 'src',
       filename: 'sw.ts',
       registerType: 'autoUpdate',
+      // 開発サーバーでもService Workerを登録する。無効だとnavigator.serviceWorker.readyが
+      // 永遠に解決されず、プッシュの購読/解除が開発時に動かない。
+      devOptions: {
+        enabled: true,
+        type: 'module',
+      },
       injectManifest: {
         // アプリシェルのオフラインキャッシュは不要(push/notificationclickのみ自前実装)なので、
         // プリキャッシュ対象を空にして純粋なメッセージング用Service Workerとして使う。
