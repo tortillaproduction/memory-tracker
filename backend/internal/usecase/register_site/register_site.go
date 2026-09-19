@@ -3,6 +3,7 @@ package register_site
 import (
 	"context"
 	"errors"
+	"net/url"
 
 	"github.com/tortillaproduction/memory-tracker/internal/domain/checkin"
 	"github.com/tortillaproduction/memory-tracker/internal/domain/site"
@@ -10,6 +11,13 @@ import (
 )
 
 var ErrSiteLimitReached = errors.New("site limit reached for current plan")
+var ErrInvalidURL = errors.New("url must be a valid absolute URL")
+var ErrInvalidInterval = errors.New("interval hours must be between 1 and 8760")
+
+// maxIntervalHours はチェック間隔の上限（1年分）。フロントのプリセット(最大168時間)より
+// 十分大きく取りつつ、APIを直接叩かれた場合に桁違いの値(例: UNIXタイムスタンプの誤入力)が
+// 保存されてしまうのを防ぐための現実的な上限。
+const maxIntervalHours = 24 * 365
 
 type Input struct {
 	UserID        user.ID
@@ -36,6 +44,14 @@ func NewUsecase(userRepo user.Repository, siteRepo site.Repository, checkinRepo 
 }
 
 func (uc *Usecase) Execute(ctx context.Context, in Input) (*site.Site, error) {
+	parsed, err := url.ParseRequestURI(in.URL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return nil, ErrInvalidURL
+	}
+	if in.IntervalHours <= 0 || in.IntervalHours > maxIntervalHours {
+		return nil, ErrInvalidInterval
+	}
+
 	u, err := uc.userRepo.FindByID(ctx, in.UserID)
 	if err != nil {
 		return nil, err
