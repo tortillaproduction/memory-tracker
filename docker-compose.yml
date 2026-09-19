@@ -20,6 +20,7 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:-http://localhost:8080/api/auth/google/callback}
       AUTO_MIGRATE: ${AUTO_MIGRATE:-true}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET must be set in .env}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-onboarding@resend.dev}
       EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-Memory Tracker}
