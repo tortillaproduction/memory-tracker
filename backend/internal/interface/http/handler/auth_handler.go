@@ -156,6 +156,9 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ユーザーごとに内容が変わるレスポンスなので、ブラウザ/中間プロキシ・CDNに
+	// キャッシュさせず、常に最新のセッションのユーザー情報を返す。
+	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"id":         u.ID(),
