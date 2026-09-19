@@ -36,8 +36,16 @@ func NewUsecase(userRepo domainUser.Repository, notificationRepo domainNotificat
 func (uc *Usecase) Execute(ctx context.Context, info GoogleUserInfo) (*domainUser.User, error) {
 	existing, err := uc.userRepo.FindByGoogleID(ctx, info.GoogleID)
 	if err == nil {
+		changed := false
+		if existing.Name() != info.Name {
+			existing.UpdateName(info.Name)
+			changed = true
+		}
 		if existing.PictureURL() != info.Picture {
 			existing.UpdatePicture(info.Picture)
+			changed = true
+		}
+		if changed {
 			saved, _, err := uc.userRepo.Save(ctx, existing)
 			if err != nil {
 				return nil, err

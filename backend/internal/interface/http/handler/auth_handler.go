@@ -107,6 +107,7 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		GoogleID: googleUser.ID,
 		Email:    googleUser.Email,
 		Name:     googleUser.Name,
+		Picture:  googleUser.Picture,
 	})
 	if err != nil {
 		h.logger.Error("failed to find or create user", "error", err)
@@ -157,11 +158,12 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"id":       u.ID(),
-		"email":    u.Email(),
-		"name":     u.Name(),
-		"planType": u.Plan().Type(),
-		"maxSites": u.Plan().MaxSites(),
+		"id":         u.ID(),
+		"email":      u.Email(),
+		"name":       u.Name(),
+		"pictureUrl": u.PictureURL(),
+		"planType":   u.Plan().Type(),
+		"maxSites":   u.Plan().MaxSites(),
 	})
 }
 
