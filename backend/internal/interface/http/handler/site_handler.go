@@ -104,6 +104,10 @@ func (h *SiteHandler) Register(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "site limit reached for your plan", http.StatusPaymentRequired)
 			return
 		}
+		if errors.Is(err, register_site.ErrInvalidURL) || errors.Is(err, register_site.ErrInvalidInterval) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		h.logger.Error("failed to register site", "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
