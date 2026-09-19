@@ -38,6 +38,11 @@ func (u *User) Name() string       { return u.name }
 func (u *User) PictureURL() string { return u.pictureURL }
 func (u *User) Plan() plan.Plan    { return u.plan }
 
+// UpdateName はGoogle側で表示名が変わった場合に、再ログイン時に反映するための操作。
+func (u *User) UpdateName(name string) {
+	u.name = name
+}
+
 // UpdatePicture はGoogle側でプロフィール画像が変わった場合に、再ログイン時に反映するための操作。
 func (u *User) UpdatePicture(pictureURL string) {
 	u.pictureURL = pictureURL

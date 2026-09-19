@@ -55,9 +55,10 @@ func (c *GoogleOAuthClient) AuthURL(state string) string {
 }
 
 type GoogleUserInfo struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
-	Name  string `json:"name"`
+	ID      string `json:"id"`
+	Email   string `json:"email"`
+	Name    string `json:"name"`
+	Picture string `json:"picture"`
 }
 
 // ExchangeCode は認可コードをアクセストークンに交換し、続けてユーザー情報を取得する。
