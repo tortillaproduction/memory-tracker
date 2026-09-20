@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { clearPrefill, readPrefill } from '../lib/sitePrefill';
 import { useAuth } from '../hooks/useAuth';
 import { useDeleteSite, useSites } from '../hooks/useSites';
 import { API_BASE_URL } from '../api/client';
@@ -18,7 +19,12 @@ export default function Dashboard() {
   const { data, isLoading, isError } = useSites();
   const { mutate: deleteSite, isPending: isDeleting } = useDeleteSite();
   const { showToast } = useToast();
-  const [showAddModal, setShowAddModal] = useState(false);
+  // ブックマークレット経由(?title=&url=)なら、初期値を入れた状態でモーダルを開く
+  const [prefill] = useState(readPrefill);
+  const [showAddModal, setShowAddModal] = useState(prefill !== null);
+  useEffect(() => {
+    clearPrefill();
+  }, []);
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string;
     name: string;
@@ -141,7 +147,13 @@ export default function Dashboard() {
         + Add Site
       </button>
 
-      {showAddModal && <AddSiteModal onClose={() => setShowAddModal(false)} />}
+      {showAddModal && (
+        <AddSiteModal
+          onClose={() => setShowAddModal(false)}
+          initialName={prefill?.name}
+          initialUrl={prefill?.url}
+        />
+      )}
 
       {deleteTarget && (
         <DeleteSiteModal

@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import ThemeSwitcher from './components/ThemeSwitcher';
 import Footer from './components/Footer';
+import BookmarkletLink from './components/BookmarkletLink';
 import { LOGIN_TOAST_FLAG_KEY, LOGOUT_TOAST_FLAG_KEY } from './api/auth';
 import { useAuth } from './hooks/useAuth';
 import { ToastList, useToast } from './contexts/ToastContext';
@@ -219,21 +220,44 @@ function App() {
                         </li>
 
                         <div className="my-2 h-px bg-base-content/10"></div>
+                        <li className="menu-title text-xs px-2.5 py-1 font-normal text-base-content">
+                          <span className="flex items-center gap-2">
+                            <MenuIcon>
+                              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                            </MenuIcon>
+                            Bookmarklet
+                          </span>
+                        </li>
+                        <li>
+                          <div
+                            className="tooltip tooltip-left active:bg-transparent! active:text-inherit! focus:bg-transparent!"
+                            data-tip="Drag this to your bookmarks bar."
+                          >
+                            <div className="flex items-center justify-center gap-3 px-2 py-1 ml-8">
+                              <BookmarkletLink />
+                            </div>
+                          </div>
+                        </li>
+
                         {!install.isInstalled && install.canPrompt && (
-                          <li>
-                            <button onClick={() => install.promptInstall()}>
-                              <MenuIcon>
-                                <path d="M12 3v12" />
-                                <path d="M7 10l5 5 5-5" />
-                                <path d="M5 21h14" />
-                              </MenuIcon>
-                              Install app
-                            </button>
-                          </li>
+                          <>
+                            <div className="my-2 h-px bg-base-content/10"></div>
+                            <li>
+                              <button onClick={() => install.promptInstall()}>
+                                <MenuIcon>
+                                  <path d="M12 3v12" />
+                                  <path d="M7 10l5 5 5-5" />
+                                  <path d="M5 21h14" />
+                                </MenuIcon>
+                                Install app
+                              </button>
+                            </li>
+                          </>
                         )}
 
-                        <div className="my-2 h-px bg-base-content/10"></div>
-                        <li>
+                        {/* logoutは他の項目と区別するため、dividerとの間の余白を広めにとる */}
+                        <div className="mt-2 mb-4 h-px bg-base-content/10"></div>
+                        <li className="mt-3 mb-5">
                           <button onClick={() => logout()}>
                             <MenuIcon>
                               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
