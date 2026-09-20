@@ -148,49 +148,142 @@ VAPID_SUBJECT=mailto:support@example.com
 
 ## 本番デプロイ
 
-コストと運用の手間を抑えるため、以下のハイブリッド構成でデプロイする。
+コストと運用の手間を抑えるため、以下の構成でデプロイします。
 
 | 役割 | サービス |
 |---|---|
 | フロントエンド | [Vercel](https://vercel.com)（Hobbyプラン、$0） |
-| バックエンド | [Render](https://render.com) Web Service（無料枠、無アクセス時はスリープ） |
+| バックエンド | [Render](https://render.com) Web Service（Docker、無料枠。無アクセス時はスリープ） |
 | DB | [Neon](https://neon.tech)（サーバーレスPostgres、無料枠） |
-| メール | Resend（既存） |
+| メール | [Resend](https://resend.com) |
 
-### 1. Neon（DB）
+### 全体像とリクエストの流れ
 
-1. Neonでプロジェクトを作成し、発行された接続文字列（`DATABASE_URL`）を控える
+ブラウザはVercelのドメインだけにアクセスします。`frontend/vercel.json`のrewriteで`/api/*`と`/go/*`をRenderのバックエンドへプロキシするため、ブラウザから見ると**同一オリジン**の通信になり、サードパーティCookieブロックの影響を受けずにセッションCookieを扱えます。
 
-### 2. Render（バックエンド）
+```
+ブラウザ ──> https://<Vercelドメイン>/            → Vercel（SPA配信）
+         ──> https://<Vercelドメイン>/api/*, /go/* → Vercelがrewriteで https://<Renderドメイン>/... へ転送
+                                                    └─> Neon(Postgres)
+```
 
-1. GitHubリポジトリと連携し、`backend/Dockerfile` を使うWeb Serviceを作成
-2. 環境変数を設定:
-   - `DATABASE_URL`: Neonの接続文字列
-   - `AUTO_MIGRATE`: `false`
-   - `FRONTEND_URL`: Vercelの本番URL（CORS許可オリジンとして使用）
-   - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`
-   - `GOOGLE_REDIRECT_URL`: `https://<Renderのバックエンドドメイン>/api/auth/google/callback`
-   - `SESSION_SECRET`: 開発用とは別に新規生成した強い値
-   - `RESEND_API_KEY` / `EMAIL_FROM_ADDRESS`（独自ドメイン認証後のアドレス） / `EMAIL_FROM_NAME`
-   - `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT`（本番用に新規生成した鍵ペア。ブラウザ通知を使う場合のみ必須）
-3. Pre-Deploy Command にマイグレーション実行コマンドを設定し、アプリ起動前に一度だけ適用されるようにする（`docker-compose.prod.yml` の `migrate` サービスと同じ考え方）:
-   ```bash
-   migrate -path ./migrations -database "$DATABASE_URL" up
+このため、本番では次の2点が重要です。
+
+- フロントエンドの`VITE_API_BASE_URL`は**設定しない**（未設定なら本番ビルドは相対パスを使う）。
+- OAuthのリダイレクトURIは**Renderではなく、Vercelのドメイン**にする（`state` CookieがVercelドメインに保存されるため、コールバックも同じドメインで受ける必要がある）。
+
+### 環境変数の一覧（バックエンド / Render）
+
+| 変数 | 必須 | 本番での設定値 |
+|---|---|---|
+| `PORT` | 必須 | `8080`（アプリは8080固定で待ち受けるため、Renderにポートを教える） |
+| `DATABASE_URL` | 必須 | Neonの接続文字列（`?sslmode=require`付き） |
+| `AUTO_MIGRATE` | 必須 | `true`（起動時に未適用のマイグレーションを実行） |
+| `FRONTEND_URL` | 必須 | VercelのURL（例: `https://memory-tracker.vercel.app`）。末尾スラッシュ・スキーム省略は不可。CORS許可オリジン、OAuth後のリダイレクト先、通知内のチェックインリンクに使われる |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 必須 | Google Cloud Consoleで発行した値 |
+| `GOOGLE_REDIRECT_URL` | 必須 | `https://<Vercelドメイン>/api/auth/google/callback` |
+| `SESSION_SECRET` | 必須 | 開発用とは別の強いランダム値（例: `openssl rand -hex 32`）。チェックインリンクの署名鍵も兼ねる。未設定だと起動に失敗する |
+| `RESEND_API_KEY` | 任意 | 未設定ならメール通知は無効 |
+| `EMAIL_FROM_ADDRESS` / `EMAIL_FROM_NAME` | 任意 | 認証済み独自ドメインのアドレス / 表示名 |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | 任意 | 本番用に新規生成した鍵ペア。未設定ならブラウザ通知は無効 |
+| `VAPID_SUBJECT` | 任意 | `mailto:<連絡先メールアドレス>` |
+
+`LINE_*`と`STRIPE_*`は未実装のため設定不要です。
+
+### 環境変数の一覧（フロントエンド / Vercel）
+
+| 変数 | 設定値 |
+|---|---|
+| `VITE_API_BASE_URL` | **設定しない**（上記の理由。ローカル開発時のみ既定で`http://localhost:8080`が使われる） |
+
+### 手順
+
+デプロイ先のURLが互いに必要になるため、次の順で進めます。
+
+#### 1. Neon（DB）
+
+1. Neonでプロジェクトを作成する
+2. ダッシュボードの Connection string（`postgres://...neon.tech/...?sslmode=require`）を控える → `DATABASE_URL`
+
+#### 2. VAPID鍵・SESSION_SECRETを生成する（ローカル）
+
+```bash
+# SESSION_SECRET
+openssl rand -hex 32
+
+# VAPID鍵ペア（ブラウザ通知を使う場合）
+npx web-push generate-vapid-keys
+```
+
+#### 3. Render（バックエンド）
+
+1. New → Web Service でGitHubリポジトリを連携する
+2. 次のとおり設定する
+   - Language: `Docker`
+   - Root Directory: `backend`（`backend/Dockerfile`が使われる）
+   - Instance Type: Free
+   - Branch: `main`（pushで自動デプロイ）
+3. Environment Variablesに、上の一覧のバックエンド用変数を登録する。この時点でVercelのURLが未確定なら、`FRONTEND_URL`と`GOOGLE_REDIRECT_URL`は仮の値にして、手順4の後に更新する
+4. デプロイ後、発行されたURL（`https://<name>.onrender.com`）を控える
+5. `https://<name>.onrender.com/api/auth/me` を開き、`401`が返れば起動成功（未ログインのため）
+
+> **マイグレーション**: Renderの無料枠はPre-Deploy Commandを使えず、ランタイムイメージ（alpine）にも`migrate` CLIは入っていません。そのため`AUTO_MIGRATE=true`にして、アプリ起動時に`backend/migrations`を自動適用します（`backend/Dockerfile`で同梱済み）。複数インスタンスに増やす場合は、`docker-compose.prod.yml`の`migrate`サービスのように、事前に1回だけ実行する方式に切り替えてください。
+
+#### 4. Vercel（フロントエンド）
+
+1. **先に`frontend/vercel.json`のrewrite先を自分のRenderのURLに書き換えてコミット・pushする**（現状は`memory-tracker-lamg.onrender.com`が直書きされている）
+
+   ```json
+   {
+     "rewrites": [
+       { "source": "/api/(.*)", "destination": "https://<name>.onrender.com/api/$1" },
+       { "source": "/go/(.*)", "destination": "https://<name>.onrender.com/go/$1" },
+       { "source": "/(.*)", "destination": "/index.html" }
+     ]
+   }
    ```
 
-### 3. Vercel（フロントエンド）
+2. Add New → Project でGitHubリポジトリを連携する
+3. Root Directoryを`frontend`に設定する（Viteは自動検出。Build Command: `npm run build`、Output Directory: `dist`）
+4. 環境変数は設定せずにデプロイする
+5. 発行されたVercelのURL（`https://<project>.vercel.app`）を控える
 
-1. GitHubリポジトリと連携し、Root Directoryを `frontend` に設定（Vite構成は自動検出される）
-2. 環境変数 `VITE_API_BASE_URL` にRenderのバックエンドURLを設定
-3. `frontend/vercel.json` によりSPAのクライアントサイドルーティングが有効になる
+#### 5. RenderにVercelのURLを反映する
 
-### 4. Google OAuthの本番設定
+Renderの環境変数を更新し、再デプロイする。
 
-[Google Cloud Console](https://console.cloud.google.com/) の承認済みリダイレクトURIに、本番のRenderバックエンドURL（`https://<Renderドメイン>/api/auth/google/callback`）を追加する。
+- `FRONTEND_URL` = `https://<project>.vercel.app`
+- `GOOGLE_REDIRECT_URL` = `https://<project>.vercel.app/api/auth/google/callback`
 
-### 5. CI
+#### 6. Google OAuthの本番設定
 
-`.github/workflows/ci.yml` により、push/PR時にbackendの `go build` / `go vet` / `go test` とfrontendの `npm run build`（型チェック含む）を実行する。実際のデプロイはVercel/Renderそれぞれのgit連携（mainブランチへのpushで自動反映）に任せる。
+[Google Cloud Console](https://console.cloud.google.com/) → 認証情報 → OAuthクライアントIDで次を追加する。
+
+- 承認済みのリダイレクトURI: `https://<project>.vercel.app/api/auth/google/callback`
+- （必要に応じて）承認済みのJavaScript生成元: `https://<project>.vercel.app`
+
+`GOOGLE_REDIRECT_URL`とここの値は**完全一致**させてください（不一致だと`redirect_uri_mismatch`になります）。
+
+#### 7. メールの本番設定（Resend）
+
+1. Resendのダッシュボードで独自ドメインを追加し、表示されたDNSレコード（SPF/DKIM）を設定して認証する
+2. `EMAIL_FROM_ADDRESS`をそのドメインのアドレスに変更する（`onboarding@resend.dev`のままだと、自分のアドレス宛にしか送れない）
+
+#### 8. 動作確認
+
+1. `https://<project>.vercel.app`を開き、Googleでログインできる
+2. サイトを登録するとダッシュボードに表示される
+3. スマホでホーム画面に追加（PWA）し、ナビバーのユーザーメニューからPushを有効にできる（VAPID鍵を設定した場合。iOSはPWAとしてインストールが必要）
+
+### 運用上の注意
+
+- **Renderの無料枠はスリープする**: 無アクセスが続くとインスタンスが停止し、初回アクセスは起動待ちで遅くなります。また通知バッチ（15分間隔の`time.Ticker`）は**インスタンスが起動している間しか動きません**。確実に通知したい場合は有料プランにするか、外部から定期的にアクセスして起こしてください。
+- **URLを変えたとき**: Vercel/RenderのURL（カスタムドメイン含む）を変更したら、`vercel.json`のrewrite先、`FRONTEND_URL`、`GOOGLE_REDIRECT_URL`、Google Cloud Consoleのリダイレクト URIをすべて揃えて更新してください。
+- **`SESSION_SECRET`を変更すると**、発行済みのチェックインリンク（メール/Push内のリンク）が無効になります。
+
+### CI
+
+`.github/workflows/ci.yml`により、push（main）/PR時にbackendの`go build` / `go vet` / `go test`とfrontendの`npm run build`（型チェック含む）を実行します。デプロイはVercel/Renderそれぞれのgit連携（mainへのpushで自動反映）に任せています。
 
 ## トラブルシューティング
 
