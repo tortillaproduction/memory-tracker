@@ -31,6 +31,22 @@ export default defineConfig({
         display: 'standalone',
         background_color: '#EEEBF6',
         theme_color: '#3B1160',
+        screenshots: [
+          {
+            src: '/screenshot-wide.png',
+            sizes: '1280x720',
+            type: 'image/png',
+            form_factor: 'wide',
+            label: 'Memory Tracker on desktop',
+          },
+          {
+            src: '/screenshot-narrow.png',
+            sizes: '750x1334',
+            type: 'image/png',
+            form_factor: 'narrow',
+            label: 'Memory Tracker on mobile',
+          },
+        ],
         icons: [
           {
             src: '/logo-192.png',
