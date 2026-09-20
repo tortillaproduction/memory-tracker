@@ -133,7 +133,8 @@ function App() {
                             </div>
                           </div>
                         </li>
-                        <li className="menu-title text-xs px-2 py-1">
+
+                        <li className="menu-title text-xs px-2.5 py-1 font-normal text-base-content">
                           <span className="flex items-center gap-2">
                             <MenuIcon>
                               <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
@@ -144,11 +145,9 @@ function App() {
                         </li>
                         <li>
                           <div
-                            className={
-                              !push.isSupported
-                                ? 'tooltip tooltip-left'
-                                : undefined
-                            }
+                            className={`active:bg-transparent! active:text-inherit! focus:bg-transparent! ${
+                              !push.isSupported ? 'tooltip tooltip-left' : ''
+                            }`}
                             data-tip={
                               !push.isSupported
                                 ? 'Install the app to enable push notifications'
@@ -156,7 +155,7 @@ function App() {
                             }
                           >
                             <div
-                              className="flex items-center justify-center gap-3 px-2 py-1 ml-6"
+                              className="flex items-center justify-center gap-3 px-2 py-1 ml-8"
                               onMouseDown={(e) => e.preventDefault()}
                             >
                               <button
@@ -218,6 +217,8 @@ function App() {
                             </div>
                           </div>
                         </li>
+
+                        <div className="my-2 h-px bg-base-content/10"></div>
                         {!install.isInstalled && install.canPrompt && (
                           <li>
                             <button onClick={() => install.promptInstall()}>
@@ -230,7 +231,8 @@ function App() {
                             </button>
                           </li>
                         )}
-                        <div className="divider my-1"></div>
+
+                        <div className="my-2 h-px bg-base-content/10"></div>
                         <li>
                           <button onClick={() => logout()}>
                             <MenuIcon>
