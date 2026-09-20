@@ -5,6 +5,8 @@ import { useToast } from '../contexts/ToastContext';
 
 type Props = {
   onClose: () => void;
+  initialName?: string;
+  initialUrl?: string;
 };
 
 const INTERVAL_OPTIONS = [
@@ -15,9 +17,13 @@ const INTERVAL_OPTIONS = [
   { label: '1 week', value: 168 },
 ];
 
-export default function AddSiteModal({ onClose }: Props) {
-  const [name, setName] = useState('');
-  const [url, setUrl] = useState('');
+export default function AddSiteModal({
+  onClose,
+  initialName = '',
+  initialUrl = '',
+}: Props) {
+  const [name, setName] = useState(initialName);
+  const [url, setUrl] = useState(initialUrl);
   const [intervalHours, setIntervalHours] = useState(24);
   const [errorMsg, setErrorMsg] = useState('');
   const backdropRef = useRef<HTMLDivElement>(null);

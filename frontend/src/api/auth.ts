@@ -1,3 +1,4 @@
+import { stashPrefill } from '../lib/sitePrefill';
 import { API_BASE_URL, apiFetch } from './client';
 
 export type CurrentUser = {
@@ -17,6 +18,8 @@ export const LOGOUT_TOAST_FLAG_KEY = 'mt_show_logout_toast';
 
 // ログインはリダイレクトフローのため、fetchではなくブラウザ遷移させる。
 export function redirectToGoogleLogin() {
+  // ブックマークレット経由で開かれた場合、ログイン後にモーダルへ引き継ぐ
+  stashPrefill();
   try {
     sessionStorage.setItem(LOGIN_TOAST_FLAG_KEY, '1');
   } catch {
