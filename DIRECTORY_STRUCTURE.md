@@ -1,7 +1,14 @@
-# study-tracker ディレクトリ構成
+# memory-tracker ディレクトリ構成
 
 ```
-study-tracker/
+memory-tracker/
+├── .devcontainer/
+│   └── devcontainer.json             # 開発コンテナ設定
+├── .github/
+│   └── workflows/
+│       └── ci.yml                    # CI（GitHub Actions）
+├── .vscode/                          # エディタ設定・推奨拡張機能
+│
 ├── backend/                          # Go + DDD バックエンド
 │   ├── cmd/
 │   │   └── api/
@@ -19,71 +26,102 @@ study-tracker/
 │   │   │   │   └── repository.go     # SiteRepositoryインターフェース
 │   │   │   ├── checkin/
 │   │   │   │   ├── checkin.go        # CheckInエンティティ
-│   │   │   │   ├── repository.go     # CheckInRepositoryインターフェース
-│   │   │   │   └── streak.go         # ストリーク計算ロジック
+│   │   │   │   ├── streak.go         # ストリーク計算ロジック
+│   │   │   │   └── *_test.go         # Ginkgoテスト
 │   │   │   └── notification/
-│   │   │       └── setting.go        # NotificationSettingエンティティ
+│   │   │       ├── setting.go        # NotificationSettingエンティティ
+│   │   │       ├── push_subscription.go  # PushSubscriptionエンティティ
+│   │   │       └── repository.go     # 通知関連のリポジトリインターフェース
 │   │   │
 │   │   ├── usecase/                  # アプリケーション層（ユースケース）
-│   │   │   ├── register_site/
-│   │   │   │   └── register_site.go  # サイト登録（登録=チェックイン込み）
-│   │   │   ├── checkin_site/
-│   │   │   │   └── checkin_site.go   # 経由リンク踏破時のチェックイン処理
-│   │   │   ├── calculate_streak/
-│   │   │   │   └── calculate_streak.go
-│   │   │   └── auth/
-│   │   │       └── google_login.go   # Googleログイン処理
+│   │   │   ├── auth/
+│   │   │   │   └── google_login.go   # Googleログイン処理
+│   │   │   ├── register_site/        # サイト登録（登録=チェックイン込み）
+│   │   │   ├── list_sites/           # サイト一覧取得
+│   │   │   ├── delete_site/          # サイト削除
+│   │   │   ├── checkin_site/         # 経由リンク踏破時のチェックイン処理
+│   │   │   ├── notify_overdue_sites/ # 未チェックインサイトの通知（メール/Push）
+│   │   │   │   ├── notify_overdue_sites.go
+│   │   │   │   ├── email_template.go
+│   │   │   │   └── push_payload.go
+│   │   │   ├── subscribe_push/       # Push購読の登録
+│   │   │   ├── unsubscribe_push/     # Push購読の解除
+│   │   │   └── update_notification_preferences/  # 通知チャネル設定の更新
 │   │   │
 │   │   ├── infrastructure/           # インフラ層（外部技術の実装詳細）
 │   │   │   ├── persistence/
 │   │   │   │   └── postgres/
 │   │   │   │       ├── user_repository.go
 │   │   │   │       ├── site_repository.go
-│   │   │   │       └── checkin_repository.go
+│   │   │   │       ├── checkin_repository.go
+│   │   │   │       ├── notification_repository.go
+│   │   │   │       ├── push_subscription_repository.go
+│   │   │   │       └── id_generator.go
 │   │   │   ├── notification/
-│   │   │   │   ├── email_sender.go   # メール送信実装
-│   │   │   │   └── line_sender.go    # LINE通知実装（初期はスタブ/無効化）
-│   │   │   └── auth/
-│   │   │       ├── google_oauth.go   # Google OAuthクライアント
-│   │   │       └── session_store.go  # Cookieセッションストア（Postgres）
+│   │   │   │   ├── email_sender.go       # メール送信実装
+│   │   │   │   ├── push_sender.go        # Web Push送信実装
+│   │   │   │   ├── fake_email_sender.go  # 開発/テスト用
+│   │   │   │   └── fake_push_sender.go   # 開発/テスト用
+│   │   │   ├── auth/
+│   │   │   │   ├── google_oauth.go   # Google OAuthクライアント
+│   │   │   │   ├── session_store.go  # Cookieセッションストア（Postgres）
+│   │   │   │   └── checkin_token.go  # チェックイン用トークン
+│   │   │   ├── batch/
+│   │   │   │   └── notification_scheduler.go  # 通知の定期実行
+│   │   │   └── migration/
+│   │   │       └── migration.go      # マイグレーション実行
 │   │   │
 │   │   └── interface/                # インターフェース層（外部との接点）
 │   │       └── http/
 │   │           ├── handler/
 │   │           │   ├── site_handler.go
 │   │           │   ├── checkin_handler.go   # /go/:siteId のリダイレクトもここ
-│   │           │   └── auth_handler.go
+│   │           │   ├── auth_handler.go
+│   │           │   └── push_handler.go
 │   │           ├── middleware/
-│   │           │   ├── auth_middleware.go
-│   │           │   └── cors.go
+│   │           │   └── auth_middleware.go
 │   │           └── router.go
 │   │
-│   ├── migrations/                   # golang-migrate用SQL
-│   │   └── 0001_init.up.sql
-│   │
-│   ├── test/                         # Ginkgo統合テスト（testcontainers-go利用）
+│   ├── migrations/                   # golang-migrate用SQL（up/downのペア、0001〜0007）
 │   │
 │   ├── go.mod
+│   ├── go.sum
 │   ├── Dockerfile
 │   └── Makefile
 │
-├── frontend/                         # React + Vite + Tailwind SPA
+├── frontend/                         # React + Vite + Tailwind + daisyUI SPA（PWA）
+│   ├── public/                       # favicon、PWAアイコン、logo.svg
 │   ├── src/
-│   │   ├── api/                      # orval等で自動生成されるAPIクライアント置き場
-│   │   ├── components/               # ボタン、サイトカード、ストリーク表示等
-│   │   ├── hooks/                    # useSites, useCheckin等（React Query）
+│   │   ├── api/                      # APIクライアント（auth / client / push / sites）
+│   │   ├── components/               # AddSiteModal、DeleteSiteModal、Footer、
+│   │   │                             # GoogleSignInButton、ThemeSwitcher
+│   │   ├── contexts/
+│   │   │   └── ToastContext.tsx      # トースト通知
+│   │   ├── hooks/                    # useAuth、useSites、usePushSubscription、
+│   │   │                             # useInstallPrompt
 │   │   ├── pages/
-│   │   │   └── Dashboard.tsx         # 1画面構成のメインページ
-│   │   ├── App.tsx
-│   │   └── main.tsx
+│   │   │   ├── Dashboard.tsx         # メインページ
+│   │   │   ├── Login.tsx
+│   │   │   ├── Privacy.tsx
+│   │   │   └── Terms.tsx
+│   │   ├── App.tsx                   # ルーティング、ヘッダー/ユーザーメニュー
+│   │   ├── main.tsx
+│   │   ├── sw.ts                     # Service Worker（Push受信）
+│   │   ├── index.css                 # Tailwind読み込み
+│   │   └── vite-env.d.ts
 │   ├── index.html
 │   ├── package.json
-│   ├── tailwind.config.js
-│   ├── postcss.config.js
+│   ├── tsconfig*.json                # app / node / worker
 │   ├── vite.config.ts
+│   ├── vercel.json                   # Vercelデプロイ設定
+│   ├── .prettierrc.json
 │   └── Dockerfile
 │
-├── docker-compose.yml                # app / frontend / db をまとめて起動
+├── docs/
+│   └── push-notification-spec.md     # Push通知の仕様
+│
+├── docker-compose.yml                # 開発用: backend / frontend / db をまとめて起動
+├── docker-compose.prod.yml           # 本番用
 ├── .env.example
 └── README.md
 ```
