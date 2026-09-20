@@ -17,7 +17,8 @@
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],
 	// Use 'postCreateCommand' to run commands after the container is created.
-	// "postCreateCommand": "go version",
+	// コンテナ再ビルド後もgitのコミット者情報が残るよう、作成時に設定する。
+	"postCreateCommand": "git config --global user.name \"tortillaproduction\" && git config --global user.email \"69611969+tortillaproduction@users.noreply.github.com\"",
 	// Configure tool-specific properties.
 	"customizations": {
 		"vscode": {
