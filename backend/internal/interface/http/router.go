@@ -40,6 +40,11 @@ func NewRouter(deps Dependencies) http.Handler {
 	requireAuth := middleware.RequireAuth(deps.SessionStore)
 
 	// --- 認証不要 ---
+	// keep-alive用。DBには触れず、インスタンスを起こすためだけに使う。
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
 	mux.HandleFunc("GET /api/auth/google/login", deps.AuthHandler.LoginRedirect)
 	mux.HandleFunc("GET /api/auth/google/callback", deps.AuthHandler.Callback)
 	mux.HandleFunc("POST /api/auth/logout", deps.AuthHandler.Logout)
