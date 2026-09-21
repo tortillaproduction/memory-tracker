@@ -73,5 +73,12 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    // 通知(Push/メール)のチェックインリンクは FRONTEND_URL + /go/{siteId}?token=... で、
+    // 本番ではfrontend/vercel.jsonのrewriteでバックエンドへ転送される。開発でも同じ挙動にしないと、
+    // ViteがSPAのindex.htmlを返してしまい、リンクを開いてもアプリが表示されるだけになる。
+    // docker compose内ではバックエンドのホスト名がappになるため、composeがDEV_PROXY_TARGETで上書きする。
+    proxy: {
+      '/go': process.env.DEV_PROXY_TARGET ?? 'http://localhost:8080',
+    },
   },
 });

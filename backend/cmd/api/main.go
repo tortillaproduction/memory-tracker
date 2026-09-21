@@ -133,7 +133,7 @@ func main() {
 	}
 
 	notifyUC := notify_overdue_sites.NewUsecase(db, emailSender, pushSender, pushSubRepo, notificationRepo, logger, frontendURL, checkinTokenIssuer)
-	scheduler := batch.NewNotificationScheduler(notifyUC, 15*time.Minute, logger)
+	scheduler := batch.NewNotificationScheduler(notifyUC, notificationInterval(logger), logger)
 	scheduler.Start(ctx)
 
 	router := httpinterface.NewRouter(httpinterface.Dependencies{
@@ -162,6 +162,24 @@ func getEnvOrDefault(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+const defaultNotificationInterval = 5 * time.Minute
+
+// notificationInterval returns the batch interval, overridable via
+// NOTIFICATION_INTERVAL (e.g. "1m") so notifications can be verified quickly
+// in development. Invalid or non-positive values fall back to the default.
+func notificationInterval(logger *slog.Logger) time.Duration {
+	raw := os.Getenv("NOTIFICATION_INTERVAL")
+	if raw == "" {
+		return defaultNotificationInterval
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil || d <= 0 {
+		logger.Warn("invalid NOTIFICATION_INTERVAL, using default", "value", raw, "default", defaultNotificationInterval)
+		return defaultNotificationInterval
+	}
+	return d
 }
 
 // normalizeFrontendURL trims whitespace and a trailing slash, then verifies
