@@ -6,6 +6,8 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    environment:
+      DEV_PROXY_TARGET: http://app:8080
     depends_on:
       - app
 
@@ -27,6 +29,7 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:support@example.com}
+      NOTIFICATION_INTERVAL: ${NOTIFICATION_INTERVAL:-}
     depends_on:
       db:
         condition: service_healthy

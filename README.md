@@ -83,7 +83,7 @@ migrate -path ./backend/migrations \
 
 ## メール通知（Resend）の設定
 
-通知バッチは15分ごとに動作し、期限切れサイトが1件でもあればメールを送信します。
+通知バッチは5分ごとに動作し、期限切れサイトが1件でもあればメールを送信します。
 
 1. [resend.com](https://resend.com) でアカウントを作成（無料枠: 3,000通/月）
 2. API Keys → Create API Key で`re_`から始まるAPIキーを発行
@@ -104,7 +104,7 @@ EMAIL_FROM_NAME=Memory Tracker
 ### 通知の仕組み
 
 ```
-[goroutine + time.Ticker（15分間隔）]
+[goroutine + time.Ticker（5分間隔）]
     ↓
 期限切れ かつ 前回通知からinterval_hours以上経過 のサイトを検出
     ↓
@@ -143,6 +143,23 @@ VAPID_SUBJECT=mailto:support@example.com
 **`VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`が未設定の場合**: プッシュ送信は自動的に無効化され、購読・設定APIやメール通知バッチは通常通り動作します（開発時は鍵なしで起動できます）。
 
 **ローカルでのプッシュ通知確認**: `localhost`はセキュアコンテキストとして扱われるため、ブラウザでの購読からバックエンドからの実際のプッシュ送信まで、トンネルなしでローカル完結して確認できます。インストールプロンプトのスマートフォン実機確認にはHTTPSが必要なため、Vercelのプレビューデプロイ等を利用してください。
+
+**開発中に期限切れ通知をブラウザで確認する**
+
+通知バッチはデフォルト5分間隔のため、開発中は次の手順で確認します。
+
+1. `.env`に`NOTIFICATION_INTERVAL=1m`を追加して`docker compose up -d --build app`（バッチ間隔を1分に短縮。省略時は5分。appはイメージをビルドして動かしているため、`.env`やコードを変えたら再ビルドが必要です。起動ログの`notification scheduler started`の`interval`が`60000000000`なら反映されています）
+2. `http://localhost:5173`でログインし、Notificationsのトグルを**Push**にして通知を許可する（プッシュ購読はブラウザ固有のため、SQLでは作れません）
+3. 期限切れサイトを投入する（`you@example.com`はログインに使ったアドレス）
+
+```bash
+docker compose exec -T db psql -U postgres memorytracker -v email=you@example.com \
+  < backend/scripts/dev_seed_overdue.sql
+```
+
+4. 最大1分待つと、期限切れの2サイト分の通知が届きます（期限内のサイトは通知されません）。もう一度確認したいときは手順3のSQLを再実行してください（通知ログが消えて再び対象になります）
+5. 通知（またはボタン）をクリックすると、チェックインが記録され、登録したサイトのURLへ移動します。開発時も`/go/*`はViteのプロキシ（`frontend/vite.config.ts`）でバックエンドへ転送されます（本番の`frontend/vercel.json`のrewriteと同じ挙動）
+6. 終わったら`docker compose exec -T db psql -U postgres memorytracker < backend/scripts/dev_seed_cleanup.sql`でシードを削除します
 
 **通知が届く条件・表示のされ方（タブを閉じた場合、PWAの場合など）**: [docs/push-notification-spec.md](docs/push-notification-spec.md)を参照してください。
 
@@ -277,7 +294,7 @@ Renderの環境変数を更新し、再デプロイする。
 
 ### 運用上の注意
 
-- **Renderの無料枠はスリープする**: 無アクセスが続くとインスタンスが停止し、初回アクセスは起動待ちで遅くなります。また通知バッチ（15分間隔の`time.Ticker`）は**インスタンスが起動している間しか動きません**。対策として、`.github/workflows/keep-alive.yml`が10分ごとにバックエンドの`GET /healthz`を叩いてインスタンスを起こし続けます。
+- **Renderの無料枠はスリープする**: 無アクセスが続くとインスタンスが停止し、初回アクセスは起動待ちで遅くなります。また通知バッチ（5分間隔の`time.Ticker`）は**インスタンスが起動している間しか動きません**。対策として、`.github/workflows/keep-alive.yml`が10分ごとにバックエンドの`GET /healthz`を叩いてインスタンスを起こし続けます。
   - **設定**: GitHubリポジトリの Settings → Secrets and variables → Actions → Variables タブで、`BACKEND_URL`にRenderのURL（例: `https://<name>.onrender.com`）を登録します。Actionsタブから`Keep alive`を手動実行（Run workflow）して成功を確認してください。
   - **制約**: GitHub Actionsのscheduleは混雑時に数分〜十数分遅れることがあり、スリープを完全には防げません。より確実にしたい場合は、[cron-job.org](https://cron-job.org)や[UptimeRobot](https://uptimerobot.com)などで`https://<name>.onrender.com/healthz`を5分間隔で叩いてください。また、リポジトリに60日間活動がないとscheduled workflowは自動停止します。
   - **無料枠の時間**: Renderの無料枠は月750時間で、常時起動する無料サービスが1つなら収まります（約744時間）。複数の無料サービスを立てている場合は超過します。
@@ -326,7 +343,7 @@ make test
 - [x] マイグレーション自動化（開発時: main.go起動時に自動実行 / 本番相当: 専用migrateコンテナで事前実行）
 - [x] サイト一覧取得API（`GET /api/sites`）とフロントの実データ反映
 - [x] ストリーク計算・ダッシュボード表示（ユーザー全体 / サイト別）
-- [x] メール通知バッチ（Resend、15分ごとに期限切れサイトを検出・通知）
+- [x] メール通知バッチ（Resend、5分ごとに期限切れサイトを検出・通知）
 - [x] PWA化・ブラウザ通知（Web Push、購読状況に応じてメールと自動的に切り替え）
 - [ ] LINE通知（UIはトグル用意、実装完了までグレーアウト）
 - [ ] Stripe連携（Phase 2、`plan_type`と`subscriptions`テーブルは用意済み）

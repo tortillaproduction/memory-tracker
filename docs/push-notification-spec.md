@@ -10,7 +10,7 @@
 
 ## 仕組み（コードで確認済み）
 
-- 通知バッチが15分ごとに動き、期限切れサイトを検出してWeb Pushを送信する（`backend/cmd/api/main.go`、`NewNotificationScheduler(..., 15*time.Minute, ...)`）。
+- 通知バッチが5分ごとに動き、期限切れサイトを検出してWeb Pushを送信する（`backend/cmd/api/main.go`、`NewNotificationScheduler(..., notificationInterval(logger)（デフォルト5分、環境変数`NOTIFICATION_INTERVAL`で変更可）, ...)`）。
 - 送信先は、ブラウザ提供元のプッシュサービス（Chromeなら FCM など）。サーバーは `webpush-go` でそこへメッセージを送る（`backend/internal/infrastructure/notification/push_sender.go`）。メッセージのTTLは1時間。
 - 通知を表示するのはService Worker（`frontend/src/sw.ts` の `push` イベント）であり、アプリのタブやウィンドウではない。そのため、アプリのタブが開いているかどうかは通知が届くかどうかに影響しない。
 

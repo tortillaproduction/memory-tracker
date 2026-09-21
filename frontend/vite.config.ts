@@ -1,7 +1,12 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
+
+// 開発サーバーのプロキシ先。docker compose内ではバックエンドのホスト名がappになるため、
+// composeがDEV_PROXY_TARGETで上書きする。processを直接参照すると@types/nodeが必要になるので、
+// 型が用意されているloadEnv経由で環境変数を読む(''プレフィックスでVITE_以外も対象)。
+const devProxyTarget = loadEnv('development', '.', '').DEV_PROXY_TARGET || 'http://localhost:8080';
 
 export default defineConfig({
   plugins: [
@@ -73,5 +78,11 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    // 通知(Push/メール)のチェックインリンクは FRONTEND_URL + /go/{siteId}?token=... で、
+    // 本番ではfrontend/vercel.jsonのrewriteでバックエンドへ転送される。開発でも同じ挙動にしないと、
+    // ViteがSPAのindex.htmlを返してしまい、リンクを開いてもアプリが表示されるだけになる。
+    proxy: {
+      '/go': devProxyTarget,
+    },
   },
 });
