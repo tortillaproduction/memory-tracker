@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useToast } from '../contexts/ToastContext';
-import { getVapidPublicKey, subscribePush, unsubscribePush } from '../api/push';
+import {
+  getNotificationPreferences,
+  getVapidPublicKey,
+  subscribePush,
+  unsubscribePush,
+} from '../api/push';
 
 export type NotificationChannel = 'email' | 'push';
 
@@ -50,9 +55,31 @@ export function usePushSubscription(enabled: boolean) {
     if (!isSupported || !enabled) return;
     getRegistration()
       .then((registration) => registration.pushManager.getSubscription())
-      .then(setSubscription)
+      .then(async (sub) => {
+        // 購読が410で失効すると、バックエンドは自動でpush_enabledをfalseに戻す
+        // (notify_overdue_sites.disablePushSetting)。ブラウザ側には購読オブジェクトが
+        // 残ったままになるため、サーバー側の設定と突き合わせて食い違っていたら
+        // ブラウザ側の購読も解除し、ユーザーに再設定を促す。
+        if (sub) {
+          try {
+            const prefs = await getNotificationPreferences();
+            if (!prefs.pushEnabled) {
+              await sub.unsubscribe();
+              showToast(
+                'Push notification expired. Please turn it back on.',
+                'error',
+              );
+              setSubscription(null);
+              return;
+            }
+          } catch {
+            // 設定取得に失敗しても、ローカルの購読状態はそのまま表示する。
+          }
+        }
+        setSubscription(sub);
+      })
       .catch(() => setSubscription(null));
-  }, [isSupported, enabled]);
+  }, [isSupported, enabled, showToast]);
 
   const subscribe = useCallback(async () => {
     setIsBusy(true);

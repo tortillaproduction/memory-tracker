@@ -252,6 +252,7 @@ func (uc *Usecase) sendPush(ctx context.Context, owner *SiteRow, sites []*SiteRo
 		case sendErr == nil:
 			delivered++
 		case errors.Is(sendErr, notification.ErrSubscriptionGone):
+			uc.logger.Warn("push subscription gone, removing", "userID", owner.UserID)
 			if delErr := uc.pushSubRepo.DeleteByEndpoint(ctx, sub.Endpoint()); delErr != nil {
 				uc.logger.Error("failed to delete gone push subscription", "userID", owner.UserID, "error", delErr)
 			}
@@ -282,7 +283,11 @@ func (uc *Usecase) disablePushSetting(ctx context.Context, userID user.ID) error
 		return nil
 	}
 	setting.SetPushEnabled(false)
-	return uc.settingRepo.Update(ctx, setting)
+	if err := uc.settingRepo.Update(ctx, setting); err != nil {
+		return err
+	}
+	uc.logger.Info("push_enabled auto-disabled after all subscriptions gone", "userID", userID)
+	return nil
 }
 
 func (uc *Usecase) sendEmail(owner *SiteRow, sites []*SiteRow, now time.Time) error {

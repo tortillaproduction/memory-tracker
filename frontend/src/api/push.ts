@@ -19,3 +19,13 @@ export function unsubscribePush(endpoint: string): Promise<void> {
     body: JSON.stringify({ endpoint }),
   });
 }
+
+export type NotificationPreferences = {
+  emailEnabled: boolean;
+  pushEnabled: boolean;
+  disableEmailWhenPushAvailable: boolean;
+};
+
+export function getNotificationPreferences(): Promise<NotificationPreferences> {
+  return apiFetch<NotificationPreferences>('/api/notification-preferences');
+}
