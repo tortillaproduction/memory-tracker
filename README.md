@@ -294,10 +294,6 @@ Renderの環境変数を更新し、再デプロイする。
 
 ### 運用上の注意
 
-- **Renderの無料枠はスリープする**: 無アクセスが続くとインスタンスが停止し、初回アクセスは起動待ちで遅くなります。また通知バッチ（5分間隔の`time.Ticker`）は**インスタンスが起動している間しか動きません**。対策として、`.github/workflows/keep-alive.yml`が10分ごとにバックエンドの`GET /healthz`を叩いてインスタンスを起こし続けます。
-  - **設定**: GitHubリポジトリの Settings → Secrets and variables → Actions → Variables タブで、`BACKEND_URL`にRenderのURL（例: `https://<name>.onrender.com`）を登録します。Actionsタブから`Keep alive`を手動実行（Run workflow）して成功を確認してください。
-  - **制約**: GitHub Actionsのscheduleは混雑時に数分〜十数分遅れることがあり、スリープを完全には防げません。より確実にしたい場合は、[cron-job.org](https://cron-job.org)や[UptimeRobot](https://uptimerobot.com)などで`https://<name>.onrender.com/healthz`を5分間隔で叩いてください。また、リポジトリに60日間活動がないとscheduled workflowは自動停止します。
-  - **無料枠の時間**: Renderの無料枠は月750時間で、常時起動する無料サービスが1つなら収まります（約744時間）。複数の無料サービスを立てている場合は超過します。
 - **URLを変えたとき**: Vercel/RenderのURL（カスタムドメイン含む）を変更したら、`vercel.json`のrewrite先、`FRONTEND_URL`、`GOOGLE_REDIRECT_URL`、Google Cloud Consoleのリダイレクト URIをすべて揃えて更新してください。
 - **`SESSION_SECRET`を変更すると**、発行済みのチェックインリンク（メール/Push内のリンク）が無効になります。
 
