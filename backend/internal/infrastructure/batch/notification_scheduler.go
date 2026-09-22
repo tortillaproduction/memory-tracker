@@ -24,9 +24,12 @@ func NewNotificationScheduler(
 }
 
 // Start はバックグラウンドでスケジューラーを起動する。
-// ctx がキャンセルされると自動的に停止する。
-func (s *NotificationScheduler) Start(ctx context.Context) {
+// ctx がキャンセルされると自動的に停止する。返り値のチャネルは
+// goroutineが終了すると閉じられるため、呼び出し側は停止完了を待てる。
+func (s *NotificationScheduler) Start(ctx context.Context) <-chan struct{} {
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		s.logger.Info("notification scheduler started", "interval", s.interval)
 		ticker := time.NewTicker(s.interval)
 		defer ticker.Stop()
@@ -43,4 +46,5 @@ func (s *NotificationScheduler) Start(ctx context.Context) {
 			}
 		}
 	}()
+	return done
 }

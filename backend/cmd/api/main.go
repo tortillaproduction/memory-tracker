@@ -42,7 +42,13 @@ func main() {
 		logger.Error("failed to connect to db", "error", err)
 		os.Exit(1)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			logger.Error("failed to close db", "error", err)
+		} else {
+			logger.Info("db connection closed")
+		}
+	}()
 
 	frontendURL, err := normalizeFrontendURL(getEnvOrDefault("FRONTEND_URL", "http://localhost:5173"))
 	if err != nil {
@@ -134,7 +140,7 @@ func main() {
 
 	notifyUC := notify_overdue_sites.NewUsecase(db, emailSender, pushSender, pushSubRepo, notificationRepo, logger, frontendURL, checkinTokenIssuer)
 	scheduler := batch.NewNotificationScheduler(notifyUC, notificationInterval(logger), logger)
-	scheduler.Start(ctx)
+	schedulerDone := scheduler.Start(ctx)
 
 	router := httpinterface.NewRouter(httpinterface.Dependencies{
 		RegisterSiteUsecase:  registerSiteUC,
@@ -150,11 +156,38 @@ func main() {
 	})
 
 	addr := ":8080"
-	logger.Info("starting server", "addr", addr)
-	if err := http.ListenAndServe(addr, router); err != nil {
-		logger.Error("server stopped", "error", err)
-		os.Exit(1)
+	srv := &http.Server{Addr: addr, Handler: router}
+
+	serverErr := make(chan error, 1)
+	go func() {
+		logger.Info("starting server", "addr", addr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			serverErr <- err
+			return
+		}
+		serverErr <- nil
+	}()
+
+	select {
+	case <-ctx.Done():
+		logger.Info("shutdown signal received")
+	case err := <-serverErr:
+		if err != nil {
+			logger.Error("server stopped", "error", err)
+			os.Exit(1)
+		}
 	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		logger.Error("http server shutdown error", "error", err)
+	} else {
+		logger.Info("http server stopped")
+	}
+
+	<-schedulerDone
+	logger.Info("graceful shutdown complete")
 }
 
 func getEnvOrDefault(key, fallback string) string {
