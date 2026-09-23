@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -13,7 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/lib/pq"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 
 	infraauth "github.com/tortillaproduction/memory-tracker/internal/infrastructure/auth"
 	"github.com/tortillaproduction/memory-tracker/internal/infrastructure/batch"
@@ -37,11 +37,18 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 	dsn := os.Getenv("DATABASE_URL")
-	db, err := sql.Open("postgres", dsn)
+	// Neonのpooled接続(PgBouncer transaction pooling)はサーバーサイドprepared statementの
+	// 状態をコネクション間で保持できないため、simple query protocolを強制する。
+	// これをしないと "unnamed prepared statement does not exist" や
+	// "bind message has N result formats but query has M columns" のようなエラーが
+	// 同時アクセス時に散発する。
+	connConfig, err := pgx.ParseConfig(dsn)
 	if err != nil {
-		logger.Error("failed to connect to db", "error", err)
+		logger.Error("failed to parse DATABASE_URL", "error", err)
 		os.Exit(1)
 	}
+	connConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+	db := stdlib.OpenDB(*connConfig)
 	defer func() {
 		if err := db.Close(); err != nil {
 			logger.Error("failed to close db", "error", err)

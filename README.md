@@ -194,7 +194,7 @@ docker compose exec -T db psql -U postgres memorytracker -v email=you@example.co
 | 変数 | 必須 | 本番での設定値 |
 |---|---|---|
 | `PORT` | 必須 | `8080`（アプリは8080固定で待ち受けるため、Renderにポートを教える） |
-| `DATABASE_URL` | 必須 | Neonの接続文字列（`?sslmode=require`付き） |
+| `DATABASE_URL` | 必須 | Neonの**direct（non-pooled）**接続文字列（`?sslmode=require`付き）。pooled接続（PgBouncer transaction pooling）を使うと、同時アクセス時に`unnamed prepared statement does not exist`や`bind message has N result formats but query has M columns`のようなエラーが散発することがある |
 | `AUTO_MIGRATE` | 必須 | `true`（起動時に未適用のマイグレーションを実行） |
 | `FRONTEND_URL` | 必須 | VercelのURL（例: `https://memory-tracker.vercel.app`）。末尾スラッシュ・スキーム省略は不可。CORS許可オリジン、OAuth後のリダイレクト先、通知内のチェックインリンクに使われる |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 必須 | Google Cloud Consoleで発行した値 |
@@ -220,7 +220,7 @@ docker compose exec -T db psql -U postgres memorytracker -v email=you@example.co
 #### 1. Neon（DB）
 
 1. Neonでプロジェクトを作成する
-2. ダッシュボードの Connection string（`postgres://...neon.tech/...?sslmode=require`）を控える → `DATABASE_URL`
+2. ダッシュボードの Connection string で「Pooled connection」のトグルを**オフ**にし、direct接続の文字列（`postgres://...neon.tech/...?sslmode=require`）を控える → `DATABASE_URL`（pooled接続文字列にはホスト名に`-pooler`が付く。バックエンドはPgBouncer transaction poolingと相性が悪いため、こちらは使わない）
 
 #### 2. VAPID鍵・SESSION_SECRETを生成する（ローカル）
 
