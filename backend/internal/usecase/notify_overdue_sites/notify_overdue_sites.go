@@ -96,11 +96,16 @@ func (uc *Usecase) Execute(ctx context.Context) error {
 	}
 
 	for userID, sites := range byUser {
-		if err := uc.notifyUser(ctx, sites, now); err != nil {
+		channels, err := uc.notifyUser(ctx, sites, now)
+		if err != nil {
 			uc.logger.Error("failed to send notification", "userID", userID, "error", err)
 			continue // 1ユーザーの失敗で他のユーザーへの通知を止めない
 		}
-		uc.logger.Info("notification sent", "userID", userID, "siteCount", len(sites))
+		if len(channels) == 0 {
+			uc.logger.Warn("notification not delivered on any channel, will retry next cycle", "userID", userID, "siteCount", len(sites))
+			continue
+		}
+		uc.logger.Info("notification sent", "userID", userID, "siteCount", len(sites), "channels", channels)
 	}
 
 	return nil
@@ -194,30 +199,38 @@ func (uc *Usecase) fetchOverdueSites(ctx context.Context, now time.Time) ([]*Sit
 //     即座に削除し(自己修復)、全滅した場合は同じサイクル内でメールにフォールバックする。
 //   - メールは「emailEnabledかつ(プッシュが1件も届かなかった、またはdisableEmailWhenPushAvailableがfalse)」
 //     の場合にのみ送る。
-func (uc *Usecase) notifyUser(ctx context.Context, sites []*SiteRow, now time.Time) error {
+//
+// 戻り値は実際に送信できたチャネル("push" / "email")。空の場合はどのチャネルにも送れていない。
+func (uc *Usecase) notifyUser(ctx context.Context, sites []*SiteRow, now time.Time) ([]string, error) {
 	owner := sites[0]
 
 	if err := uc.issueCheckinLinks(sites, now); err != nil {
-		return fmt.Errorf("issue checkin links: %w", err)
+		return nil, fmt.Errorf("issue checkin links: %w", err)
 	}
 
+	var channels []string
+
 	pushOK := uc.sendPush(ctx, owner, sites, now)
+	if pushOK {
+		channels = append(channels, "push")
+	}
 
 	shouldEmail := owner.EmailEnabled && (!pushOK || !owner.DisableEmailWhenPushAvailable)
 
 	if shouldEmail {
 		if err := uc.sendEmail(owner, sites, now); err != nil {
-			return err
+			return channels, err
 		}
+		channels = append(channels, "email")
 	}
 
-	if !pushOK && !shouldEmail {
+	if len(channels) == 0 {
 		// どちらのチャネルにも送れなかった(例: プッシュ購読が全滅し、メールも無効)。
 		// notification_logsには記録せず、次サイクルで再度対象にする。
-		return nil
+		return nil, nil
 	}
 
-	return uc.saveNotificationLogs(ctx, sites, now)
+	return channels, uc.saveNotificationLogs(ctx, sites, now)
 }
 
 // sendPush はユーザーの全プッシュ購読にWeb Pushを送る。1件でも届けば true を返す。
