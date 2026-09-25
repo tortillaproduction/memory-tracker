@@ -128,20 +128,32 @@ func main() {
 	pushHandler := handler.NewPushHandler(vapidPublicKey, subscribePushUC, unsubscribePushUC, notificationPreferencesUC, logger)
 
 	// --- 通知バッチのセットアップ ---
-	// RESEND_API_KEYが設定されていない場合はメール送信をno-opにする(プッシュだけの運用も許容する)。
+	// SMTP_HOSTがあればSMTP、なければRESEND_API_KEYでResend、どちらもなければメール送信をno-opにする(プッシュだけの運用も許容する)。
 	// 開発時はキーなしで起動してもAPIサーバーとしては動作する。
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	fromName := getEnvOrDefault("EMAIL_FROM_NAME", "Memory Tracker")
 	var emailSender notification.EmailSender
-	if apiKey := os.Getenv("RESEND_API_KEY"); apiKey != "" {
+	if smtpHost := os.Getenv("SMTP_HOST"); smtpHost != "" {
+		smtpUser := os.Getenv("SMTP_USERNAME")
+		emailSender = notification.NewSMTPEmailSender(
+			smtpHost,
+			getEnvOrDefault("SMTP_PORT", "587"),
+			smtpUser,
+			os.Getenv("SMTP_PASSWORD"),
+			getEnvOrDefault("EMAIL_FROM_ADDRESS", smtpUser),
+			fromName,
+		)
+		logger.Info("email notifications use SMTP", "host", smtpHost)
+	} else if apiKey := os.Getenv("RESEND_API_KEY"); apiKey != "" {
 		emailSender = notification.NewResendEmailSender(
 			apiKey,
 			getEnvOrDefault("EMAIL_FROM_ADDRESS", "onboarding@resend.dev"),
-			getEnvOrDefault("EMAIL_FROM_NAME", "Memory Tracker"),
+			fromName,
 		)
 	} else {
-		logger.Warn("RESEND_API_KEY is not set, email notifications are disabled")
+		logger.Warn("SMTP_HOST and RESEND_API_KEY are not set, email notifications are disabled")
 		emailSender = notification.NewNoopEmailSender()
 	}
 

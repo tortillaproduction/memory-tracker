@@ -99,7 +99,22 @@ EMAIL_FROM_NAME=Memory Tracker
 
 **本番運用時**: Resendのダッシュボードで独自ドメインを認証し、`EMAIL_FROM_ADDRESS`をそのドメインのアドレスに変更してください。
 
-**`RESEND_API_KEY`が未設定の場合**: 通知バッチは自動的に無効化されます。APIサーバーとしては通常通り動作するため、開発時はキーなしで起動できます。
+### 独自ドメインがない場合（Gmail SMTP）
+
+`SMTP_HOST`を設定するとResendより優先してSMTPで送信します。Gmailなら任意の宛先に送れます（上限: 約500通/日）。
+
+1. Googleアカウントで2段階認証を有効化
+2. [アプリパスワード](https://myaccount.google.com/apppasswords)を発行
+3. `.env`に設定（`EMAIL_FROM_ADDRESS`は未設定にするとGmailアドレスが送信元になる）
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=you@gmail.com
+SMTP_PASSWORD=xxxxxxxxxxxxxxxx
+```
+
+**`SMTP_HOST`と`RESEND_API_KEY`が両方未設定の場合**: 通知バッチは自動的に無効化されます。APIサーバーとしては通常通り動作するため、開発時はキーなしで起動できます。
 
 ### 通知の仕組み
 
@@ -200,7 +215,8 @@ docker compose exec -T db psql -U postgres memorytracker -v email=you@example.co
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 必須 | Google Cloud Consoleで発行した値 |
 | `GOOGLE_REDIRECT_URL` | 必須 | `https://<Vercelドメイン>/api/auth/google/callback` |
 | `SESSION_SECRET` | 必須 | 開発用とは別の強いランダム値（例: `openssl rand -hex 32`）。チェックインリンクの署名鍵も兼ねる。未設定だと起動に失敗する |
-| `RESEND_API_KEY` | 任意 | 未設定ならメール通知は無効 |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` | 任意 | 設定するとResendより優先してSMTPで送信（Gmailはアプリパスワードを使用） |
+| `RESEND_API_KEY` | 任意 | `SMTP_HOST`と両方未設定ならメール通知は無効 |
 | `EMAIL_FROM_ADDRESS` / `EMAIL_FROM_NAME` | 任意 | 認証済み独自ドメインのアドレス / 表示名 |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | 任意 | 本番用に新規生成した鍵ペア。未設定ならブラウザ通知は無効 |
 | `VAPID_SUBJECT` | 任意 | `mailto:<連絡先メールアドレス>` |
