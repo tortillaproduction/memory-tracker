@@ -31,6 +31,22 @@ function getRegistration(): Promise<ServiceWorkerRegistration> {
   ]);
 }
 
+// ブラウザ/OS側で通知権限が取り消されると、購読が残っていても通知は表示されない。
+// サーバーには「送信成功」としか見えないため、権限が granted でなくなったことを検知したら
+// 購読を自動解除してサーバーに理由を残し、メール通知へフォールバックさせる。
+async function dropSubscriptionIfPermissionLost(
+  sub: PushSubscription,
+): Promise<boolean> {
+  if (Notification.permission === 'granted') return false;
+  try {
+    await unsubscribePush(sub.endpoint, `permission_${Notification.permission}`);
+  } catch {
+    // サーバー側の削除に失敗しても、ブラウザ側は解除する(送信時の410で最終的に掃除される)。
+  }
+  await sub.unsubscribe();
+  return true;
+}
+
 export function usePushSubscription(enabled: boolean) {
   const { showToast } = useToast();
   // Push APIの有無はブラウザ/OSで異なる: Chrome/Edge/Firefoxはブラウザタブのままでも
@@ -56,6 +72,14 @@ export function usePushSubscription(enabled: boolean) {
     getRegistration()
       .then((registration) => registration.pushManager.getSubscription())
       .then(async (sub) => {
+        if (sub && (await dropSubscriptionIfPermissionLost(sub))) {
+          showToast(
+            'Notification permission was turned off in your browser or OS settings, so push notifications were disabled.',
+            'error',
+          );
+          setSubscription(null);
+          return;
+        }
         // 購読が410で失効すると、バックエンドは自動でpush_enabledをfalseに戻す
         // (notify_overdue_sites.disablePushSetting)。ブラウザ側には購読オブジェクトが
         // 残ったままになるため、サーバー側の設定と突き合わせて食い違っていたら
@@ -79,6 +103,40 @@ export function usePushSubscription(enabled: boolean) {
         setSubscription(sub);
       })
       .catch(() => setSubscription(null));
+  }, [isSupported, enabled, showToast]);
+
+  // 起動後に権限が変更された場合(サイト設定での「ブロック」等)も検知する。
+  useEffect(() => {
+    if (!isSupported || !enabled || !navigator.permissions?.query) return;
+    let status: PermissionStatus | undefined;
+    let cancelled = false;
+    const onChange = async () => {
+      try {
+        const registration = await getRegistration();
+        const sub = await registration.pushManager.getSubscription();
+        if (sub && (await dropSubscriptionIfPermissionLost(sub))) {
+          showToast(
+            'Notification permission was turned off in your browser or OS settings, so push notifications were disabled.',
+            'error',
+          );
+          setSubscription(null);
+        }
+      } catch {
+        // 検知はベストエフォート。
+      }
+    };
+    navigator.permissions
+      .query({ name: 'notifications' })
+      .then((s) => {
+        if (cancelled) return;
+        status = s;
+        s.addEventListener('change', onChange);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      status?.removeEventListener('change', onChange);
+    };
   }, [isSupported, enabled, showToast]);
 
   const subscribe = useCallback(async () => {

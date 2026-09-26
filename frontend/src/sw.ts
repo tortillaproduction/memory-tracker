@@ -1,6 +1,8 @@
 /// <reference lib="webworker" />
+/// <reference types="vite/client" />
 
 import { precacheAndRoute } from 'workbox-precaching';
+import { API_BASE_URL } from './api/client';
 
 // vite-plugin-pwa (injectManifest) はこのファイルを型チェック用のグローバル self を
 // ServiceWorkerGlobalScope として扱えるようにビルドする。
@@ -27,10 +29,40 @@ interface PersistentNotificationOptions extends NotificationOptions {
 // push イベントのペイロード契約はbackend/internal/usecase/notify_overdue_sites/push_payload.go
 // (buildPushPayload) と対応する。urlは必ずワンタイムトークン付きのチェックインリンク
 // (/go/{siteId}?token=...) であり、これを開くだけでチェックインが記録される。
+// 通知の表示結果をサーバーへ報告する(POST /api/push/ack)。プッシュサービスの2xxは
+// 「受理した」だけで表示を保証しないため、権限拒否などで表示できなかった理由を
+// サーバーのエラーログに残す目的。報告の失敗で通知処理自体は止めない。
+async function reportDisplayResult(
+  ackToken: string | undefined,
+  status: 'shown' | 'failed',
+  error?: unknown,
+): Promise<void> {
+  if (!ackToken) return;
+  try {
+    await fetch(`${API_BASE_URL}/api/push/ack`, {
+      method: 'POST',
+      credentials: 'omit',
+      keepalive: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: ackToken,
+        status,
+        permission: typeof Notification === 'undefined' ? 'unknown' : Notification.permission,
+        error: error instanceof Error ? error.message : String(error ?? ''),
+      }),
+    });
+  } catch {
+    // 報告はベストエフォート。
+  }
+}
+
 self.addEventListener('push', (event: PushEvent) => {
   if (!event.data) return;
 
-  const { sites } = event.data.json() as { sites: OverdueSitePayload[] };
+  const { sites, ackToken } = event.data.json() as {
+    sites: OverdueSitePayload[];
+    ackToken?: string;
+  };
 
   // メールの「サイト名+ステータスの一覧」と「サイト名を記載したCTAボタン」という構成を
   // 踏襲するため、サイトごとに個別の通知を出す(1通にまとめると複数サイト分の
@@ -46,7 +78,12 @@ self.addEventListener('push', (event: PushEvent) => {
     } as PersistentNotificationOptions),
   );
 
-  event.waitUntil(Promise.all(notifications));
+  event.waitUntil(
+    Promise.all(notifications).then(
+      () => reportDisplayResult(ackToken, 'shown'),
+      (err) => reportDisplayResult(ackToken, 'failed', err),
+    ),
+  );
 });
 
 self.addEventListener('notificationclick', (event: NotificationEvent) => {

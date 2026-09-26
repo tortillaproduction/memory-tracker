@@ -44,6 +44,8 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/auth/google/callback", deps.AuthHandler.Callback)
 	mux.HandleFunc("POST /api/auth/logout", deps.AuthHandler.Logout)
 	mux.HandleFunc("GET /api/push/vapid-public-key", deps.PushHandler.VAPIDPublicKey)
+	// Service Workerからの表示報告。Cookieを持たないため報告トークンで認証する。
+	mux.HandleFunc("POST /api/push/ack", deps.PushHandler.Ack)
 
 	// --- 認証必須 ---
 	mux.Handle("GET /api/auth/me", requireAuth(http.HandlerFunc(deps.AuthHandler.Me)))

@@ -13,10 +13,14 @@ export function subscribePush(
   });
 }
 
-export function unsubscribePush(endpoint: string): Promise<void> {
+// reason はブラウザ側の都合で自動解除する場合のみ指定する(サーバーの警告ログに残る)。
+export function unsubscribePush(
+  endpoint: string,
+  reason?: string,
+): Promise<void> {
   return apiFetch<void>('/api/push/unsubscribe', {
     method: 'POST',
-    body: JSON.stringify({ endpoint }),
+    body: JSON.stringify({ endpoint, reason }),
   });
 }
 

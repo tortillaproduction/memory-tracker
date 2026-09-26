@@ -4,7 +4,11 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"time"
 
+	"github.com/tortillaproduction/memory-tracker/internal/infrastructure/notification"
+
+	"github.com/tortillaproduction/memory-tracker/internal/usecase/push_delivery"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/subscribe_push"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/unsubscribe_push"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/update_notification_preferences"
@@ -15,6 +19,7 @@ type PushHandler struct {
 	subscribeUC    *subscribe_push.Usecase
 	unsubscribeUC  *unsubscribe_push.Usecase
 	preferencesUC  *update_notification_preferences.Usecase
+	tracker        *push_delivery.Tracker
 	logger         *slog.Logger
 }
 
@@ -23,6 +28,7 @@ func NewPushHandler(
 	subscribeUC *subscribe_push.Usecase,
 	unsubscribeUC *unsubscribe_push.Usecase,
 	preferencesUC *update_notification_preferences.Usecase,
+	tracker *push_delivery.Tracker,
 	logger *slog.Logger,
 ) *PushHandler {
 	return &PushHandler{
@@ -30,6 +36,7 @@ func NewPushHandler(
 		subscribeUC:    subscribeUC,
 		unsubscribeUC:  unsubscribeUC,
 		preferencesUC:  preferencesUC,
+		tracker:        tracker,
 		logger:         logger,
 	}
 }
@@ -82,6 +89,9 @@ func (h *PushHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 func (h *PushHandler) Unsubscribe(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Endpoint string `json:"endpoint"`
+		// Reason はクライアントが自動で解除した場合の理由(例: permission_denied)。
+		// ユーザーの手動解除では空。
+		Reason string `json:"reason"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
@@ -94,12 +104,34 @@ func (h *PushHandler) Unsubscribe(w http.ResponseWriter, r *http.Request) {
 
 	userID := userIDFromContext(r.Context())
 
+	if req.Reason != "" {
+		h.logger.Warn("push subscription removed by client",
+			"userID", userID, "reason", req.Reason, "pushHost", notification.EndpointHost(req.Endpoint))
+	}
+
 	if err := h.unsubscribeUC.Execute(r.Context(), unsubscribe_push.Input{UserID: userID, Endpoint: req.Endpoint}); err != nil {
 		h.logger.Error("failed to unsubscribe push", "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// Ack は POST /api/push/ack のハンドラー(セッション認証不要、報告トークンで認証)。
+// Service Workerが通知の表示結果を報告する。表示できなかった場合(権限拒否等)は
+// エラーログに理由を残す。
+func (h *PushHandler) Ack(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+	var req push_delivery.Report
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if !h.tracker.Ack(req, time.Now()) {
+		http.Error(w, "invalid token", http.StatusUnauthorized)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

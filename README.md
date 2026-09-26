@@ -163,6 +163,8 @@ docker compose exec -T db psql -U postgres memorytracker -v email=you@example.co
 
 **通知が届く条件・表示のされ方（タブを閉じた場合、PWAの場合など）**: [docs/push-notification-spec.md](docs/push-notification-spec.md)を参照してください。
 
+**通知の運用（失敗時のリトライ、届かないときのログの見方）**: [docs/notification-operations.md](docs/notification-operations.md)を参照してください。
+
 ## 本番デプロイ
 
 コストと運用の手間を抑えるため、以下の構成でデプロイします。

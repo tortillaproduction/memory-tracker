@@ -8,17 +8,32 @@ import (
 	"log/slog"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	domainNotification "github.com/tortillaproduction/memory-tracker/internal/domain/notification"
 	"github.com/tortillaproduction/memory-tracker/internal/domain/site"
 	"github.com/tortillaproduction/memory-tracker/internal/domain/user"
 	"github.com/tortillaproduction/memory-tracker/internal/infrastructure/notification"
+	"github.com/tortillaproduction/memory-tracker/internal/usecase/push_delivery"
 )
 
 // checkinLinkTTL はメールに埋め込むチェックインリンクの有効期限。
 // この期間を過ぎたリンクを踏んでもチェックインは記録されない。
 const checkinLinkTTL = 7 * 24 * time.Hour
+
+// 通知失敗時の再試行バックオフ。失敗してもnotification_logsには記録されないため、
+// 何もしないと毎サイクル(送信先の恒久エラーでも)延々とリトライしてしまう。
+// 失敗ごとに待ち時間を倍にし、maxRetryBackoffで頭打ちにする。成功すると解除される。
+const (
+	baseRetryBackoff = 5 * time.Minute
+	maxRetryBackoff  = 6 * time.Hour
+)
+
+type retryState struct {
+	failures int
+	nextTry  time.Time
+}
 
 // SiteRow はバッチで使うサイト情報の最小DTO。
 type SiteRow struct {
@@ -51,6 +66,12 @@ type Usecase struct {
 	logger      *slog.Logger
 	frontendURL string
 	tokenIssuer TokenIssuer
+
+	// pushTracker は任意。設定するとプッシュにACKトークンを埋め込み、端末での表示結果を追跡する。
+	pushTracker *push_delivery.Tracker
+
+	mu      sync.Mutex
+	retries map[string]*retryState // userID -> 失敗状態(プロセス内のみ保持)
 }
 
 func NewUsecase(
@@ -72,7 +93,49 @@ func NewUsecase(
 		logger:      logger,
 		frontendURL: frontendURL,
 		tokenIssuer: tokenIssuer,
+		retries:     make(map[string]*retryState),
 	}
+}
+
+// WithPushDeliveryTracker はプッシュの端末側表示確認(ACK)を有効にする。
+func (uc *Usecase) WithPushDeliveryTracker(t *push_delivery.Tracker) *Usecase {
+	uc.pushTracker = t
+	return uc
+}
+
+// inBackoff は直近の失敗によりまだ再試行を待つべきユーザーかを返す。
+func (uc *Usecase) inBackoff(userID string, now time.Time) bool {
+	uc.mu.Lock()
+	defer uc.mu.Unlock()
+	st, ok := uc.retries[userID]
+	return ok && now.Before(st.nextTry)
+}
+
+// recordFailure は失敗を記録し、次回再試行までの待ち時間(指数バックオフ)を返す。
+func (uc *Usecase) recordFailure(userID string, now time.Time) time.Duration {
+	uc.mu.Lock()
+	defer uc.mu.Unlock()
+	st, ok := uc.retries[userID]
+	if !ok {
+		st = &retryState{}
+		uc.retries[userID] = st
+	}
+	st.failures++
+	backoff := baseRetryBackoff
+	for i := 1; i < st.failures && backoff < maxRetryBackoff; i++ {
+		backoff *= 2
+	}
+	if backoff > maxRetryBackoff {
+		backoff = maxRetryBackoff
+	}
+	st.nextTry = now.Add(backoff)
+	return backoff
+}
+
+func (uc *Usecase) clearFailure(userID string) {
+	uc.mu.Lock()
+	defer uc.mu.Unlock()
+	delete(uc.retries, userID)
 }
 
 // Execute は全ユーザーの全サイトを確認し、期限切れかつ未通知のサイトがあれば通知する。
@@ -80,6 +143,10 @@ func NewUsecase(
 // 二重送信防止: notification_logsの最終送信からinterval_hours以上経過しているサイトのみ対象。
 func (uc *Usecase) Execute(ctx context.Context) error {
 	now := time.Now()
+
+	if uc.pushTracker != nil {
+		uc.pushTracker.Sweep(now)
+	}
 
 	rows, err := uc.fetchOverdueSites(ctx, now)
 	if err != nil {
@@ -96,15 +163,20 @@ func (uc *Usecase) Execute(ctx context.Context) error {
 	}
 
 	for userID, sites := range byUser {
+		if uc.inBackoff(userID, now) {
+			continue
+		}
 		channels, err := uc.notifyUser(ctx, sites, now)
 		if err != nil {
-			uc.logger.Error("failed to send notification", "userID", userID, "error", err)
+			backoff := uc.recordFailure(userID, now)
+			uc.logger.Error("failed to send notification", "userID", userID, "error", err, "retryIn", backoff)
 			continue // 1ユーザーの失敗で他のユーザーへの通知を止めない
 		}
 		if len(channels) == 0 {
 			uc.logger.Warn("notification not delivered on any channel, will retry next cycle", "userID", userID, "siteCount", len(sites))
 			continue
 		}
+		uc.clearFailure(userID)
 		uc.logger.Info("notification sent", "userID", userID, "siteCount", len(sites), "channels", channels)
 	}
 
@@ -246,12 +318,6 @@ func (uc *Usecase) sendPush(ctx context.Context, owner *SiteRow, sites []*SiteRo
 		return false
 	}
 
-	payload, err := buildPushPayload(sites, now)
-	if err != nil {
-		uc.logger.Error("failed to build push payload", "userID", owner.UserID, "error", err)
-		return false
-	}
-
 	delivered := 0
 	remaining := len(subs)
 	for _, sub := range subs {
@@ -260,7 +326,24 @@ func (uc *Usecase) sendPush(ctx context.Context, owner *SiteRow, sites []*SiteRo
 			P256dhKey: sub.P256dhKey(),
 			AuthKey:   sub.AuthKey(),
 		}
+		// 端末ごとに表示報告を追跡するため、購読ごとにACKトークンを発行してペイロードに含める。
+		ackToken := ""
+		if uc.pushTracker != nil {
+			ackToken, err = uc.pushTracker.Track(user.ID(owner.UserID), notification.EndpointHost(sub.Endpoint()), now)
+			if err != nil {
+				uc.logger.Error("failed to issue push ack token", "userID", owner.UserID, "error", err)
+			}
+		}
+		payload, err := buildPushPayload(sites, now, ackToken)
+		if err != nil {
+			uc.logger.Error("failed to build push payload", "userID", owner.UserID, "error", err)
+			continue
+		}
+
 		sendErr := uc.pushSender.Send(target, payload)
+		if sendErr != nil && ackToken != "" {
+			uc.pushTracker.Forget(ackToken) // 送れていないので未確認警告の対象にしない
+		}
 		switch {
 		case sendErr == nil:
 			delivered++

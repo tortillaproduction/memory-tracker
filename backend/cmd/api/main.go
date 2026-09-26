@@ -27,6 +27,7 @@ import (
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/delete_site"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/list_sites"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/notify_overdue_sites"
+	"github.com/tortillaproduction/memory-tracker/internal/usecase/push_delivery"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/register_site"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/subscribe_push"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/unsubscribe_push"
@@ -116,7 +117,7 @@ func main() {
 	vapidPrivateKey := os.Getenv("VAPID_PRIVATE_KEY")
 	var pushSender notification.PushSender
 	if vapidPublicKey != "" && vapidPrivateKey != "" {
-		pushSender = notification.NewWebPushSender(vapidPublicKey, vapidPrivateKey, getEnvOrDefault("VAPID_SUBJECT", "mailto:support@example.com"))
+		pushSender = notification.NewWebPushSender(vapidPublicKey, vapidPrivateKey, getEnvOrDefault("VAPID_SUBJECT", "mailto:support@example.com"), logger)
 	} else {
 		logger.Warn("VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY is not set, push notifications are disabled")
 		pushSender = notification.NewNoopPushSender()
@@ -125,7 +126,8 @@ func main() {
 	subscribePushUC := subscribe_push.NewUsecase(pushSubRepo, notificationRepo, idGen)
 	unsubscribePushUC := unsubscribe_push.NewUsecase(pushSubRepo, notificationRepo)
 	notificationPreferencesUC := update_notification_preferences.NewUsecase(notificationRepo)
-	pushHandler := handler.NewPushHandler(vapidPublicKey, subscribePushUC, unsubscribePushUC, notificationPreferencesUC, logger)
+	pushTracker := push_delivery.NewTracker(infraauth.NewPushAckTokenIssuer(sessionSecret), logger)
+	pushHandler := handler.NewPushHandler(vapidPublicKey, subscribePushUC, unsubscribePushUC, notificationPreferencesUC, pushTracker, logger)
 
 	// --- 通知バッチのセットアップ ---
 	// RESEND_API_KEYが設定されていない場合はメール送信をno-opにする(プッシュだけの運用も許容する)。
@@ -145,7 +147,7 @@ func main() {
 		emailSender = notification.NewNoopEmailSender()
 	}
 
-	notifyUC := notify_overdue_sites.NewUsecase(db, emailSender, pushSender, pushSubRepo, notificationRepo, logger, frontendURL, checkinTokenIssuer)
+	notifyUC := notify_overdue_sites.NewUsecase(db, emailSender, pushSender, pushSubRepo, notificationRepo, logger, frontendURL, checkinTokenIssuer).WithPushDeliveryTracker(pushTracker)
 	scheduler := batch.NewNotificationScheduler(notifyUC, notificationInterval(logger), logger)
 	schedulerDone := scheduler.Start(ctx)
 

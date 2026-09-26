@@ -16,13 +16,15 @@ type pushSiteView struct {
 
 type pushPayload struct {
 	Sites []pushSiteView `json:"sites"`
+	// AckToken はService Workerが表示結果を POST /api/push/ack で報告する際の認証トークン。
+	AckToken string `json:"ackToken,omitempty"`
 }
 
 // buildPushPayload はユーザーの期限切れサイト一覧からプッシュ通知のペイロードを組み立てる。
 // URLには必ずCheckinURL(ワンタイムトークン付き/go/{siteId}リンク)を使うこと。
 // SiteURLを直接使うと/go/を経由せずチェックインが記録されない。
-func buildPushPayload(sites []*SiteRow, now time.Time) ([]byte, error) {
-	payload := pushPayload{Sites: make([]pushSiteView, 0, len(sites))}
+func buildPushPayload(sites []*SiteRow, now time.Time, ackToken string) ([]byte, error) {
+	payload := pushPayload{Sites: make([]pushSiteView, 0, len(sites)), AckToken: ackToken}
 	for _, s := range sites {
 		payload.Sites = append(payload.Sites, pushSiteView{
 			Name:        s.SiteName,

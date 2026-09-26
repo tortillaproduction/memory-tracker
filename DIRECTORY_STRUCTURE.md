@@ -118,7 +118,8 @@ memory-tracker/
 │   └── Dockerfile
 │
 ├── docs/
-│   └── push-notification-spec.md     # Push通知の仕様
+│   ├── push-notification-spec.md     # Push通知の仕様
+│   └── notification-operations.md    # 通知の運用(リトライ・ログ・切り分け)
 │
 ├── docker-compose.yml                # 開発用: backend / frontend / db をまとめて起動
 ├── docker-compose.prod.yml           # 本番用

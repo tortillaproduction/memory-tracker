@@ -3,7 +3,10 @@ package notification
 import (
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
+	"net/url"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 )
@@ -43,10 +46,12 @@ type webPushSender struct {
 	vapidPublicKey  string
 	vapidPrivateKey string
 	subscriber      string
+	logger          *slog.Logger
 }
 
-func NewWebPushSender(vapidPublicKey, vapidPrivateKey, subscriber string) PushSender {
+func NewWebPushSender(vapidPublicKey, vapidPrivateKey, subscriber string, logger *slog.Logger) PushSender {
 	return &webPushSender{
+		logger:          logger,
 		vapidPublicKey:  vapidPublicKey,
 		vapidPrivateKey: vapidPrivateKey,
 		subscriber:      subscriber,
@@ -71,12 +76,32 @@ func (s *webPushSender) Send(sub PushSubscriptionTarget, payloadJSON []byte) err
 	}
 	defer resp.Body.Close()
 
+	host := EndpointHost(sub.Endpoint)
+
 	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone {
 		return ErrSubscriptionGone
 	}
 	if resp.StatusCode >= 300 {
-		return fmt.Errorf("webpush send: unexpected status %d", resp.StatusCode)
+		// プッシュサービスが理由をbodyで返すことがあるため(例: 401/403のVAPID不正、413、429)、
+		// 切り分けできるようステータスと本文の先頭を残す。
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return fmt.Errorf("webpush send: unexpected status %d from %s: %s (retry-after=%q)",
+			resp.StatusCode, host, string(body), resp.Header.Get("Retry-After"))
 	}
 
+	// 2xxはプッシュサービスが受理しただけで、端末での表示は保証しない
+	// (表示結果はService Workerの報告 POST /api/push/ack で確認する)。
+	s.logger.Info("push accepted by push service", "pushHost", host, "status", resp.StatusCode)
+
 	return nil
+}
+
+// EndpointHost はプッシュサービスのホスト名を返す。endpoint全体には端末固有の
+// 秘匿トークンが含まれるため、ログにはホスト名だけを出す。
+func EndpointHost(endpoint string) string {
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Host == "" {
+		return "unknown"
+	}
+	return u.Host
 }
