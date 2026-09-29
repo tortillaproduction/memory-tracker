@@ -27,11 +27,7 @@ import (
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/delete_site"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/list_sites"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/notify_overdue_sites"
-	"github.com/tortillaproduction/memory-tracker/internal/usecase/push_delivery"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/register_site"
-	"github.com/tortillaproduction/memory-tracker/internal/usecase/subscribe_push"
-	"github.com/tortillaproduction/memory-tracker/internal/usecase/unsubscribe_push"
-	"github.com/tortillaproduction/memory-tracker/internal/usecase/update_notification_preferences"
 )
 
 func main() {
@@ -91,7 +87,6 @@ func main() {
 	checkinRepo := pg.NewCheckInRepository(db)
 	idGen := pg.NewULIDGenerator()
 	notificationRepo := pg.NewNotificationRepository(db)
-	pushSubRepo := pg.NewPushSubscriptionRepository(db)
 
 	sessionStore := infraauth.NewSessionStore(db)
 	checkinTokenIssuer := infraauth.NewCheckinTokenIssuer(sessionSecret)
@@ -109,18 +104,8 @@ func main() {
 
 	authHandler := handler.NewAuthHandler(googleClient, sessionStore, googleLoginUC, userRepo, frontendURL, logger)
 
-	// --- プッシュ購読API(廃止予定) ---
-	// 通知バッチはPushを送らない。旧フロントエンドが呼ぶ購読APIだけを当面残す。
-	vapidPublicKey := os.Getenv("VAPID_PUBLIC_KEY")
-
-	subscribePushUC := subscribe_push.NewUsecase(pushSubRepo, notificationRepo, idGen)
-	unsubscribePushUC := unsubscribe_push.NewUsecase(pushSubRepo, notificationRepo)
-	notificationPreferencesUC := update_notification_preferences.NewUsecase(notificationRepo)
-	pushTracker := push_delivery.NewTracker(infraauth.NewPushAckTokenIssuer(sessionSecret), logger)
-	pushHandler := handler.NewPushHandler(vapidPublicKey, subscribePushUC, unsubscribePushUC, notificationPreferencesUC, pushTracker, logger)
-
 	// --- 通知バッチのセットアップ ---
-	// RESEND_API_KEYが設定されていない場合はメール送信をno-opにする(プッシュだけの運用も許容する)。
+	// RESEND_API_KEYが設定されていない場合はメール送信をno-opにする。
 	// 開発時はキーなしで起動してもAPIサーバーとしては動作する。
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -147,7 +132,6 @@ func main() {
 		DeleteSiteUsecase:    deleteSiteUC,
 		CheckinSiteUsecase:   checkinSiteUC,
 		AuthHandler:          authHandler,
-		PushHandler:          pushHandler,
 		SessionStore:         sessionStore,
 		CheckinTokenVerifier: checkinTokenIssuer,
 		FrontendURL:          frontendURL,
