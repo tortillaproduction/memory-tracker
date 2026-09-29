@@ -30,7 +30,6 @@ memory-tracker/
 │   │   │   │   └── *_test.go         # Ginkgoテスト
 │   │   │   └── notification/
 │   │   │       ├── setting.go        # NotificationSettingエンティティ
-│   │   │       ├── push_subscription.go  # PushSubscriptionエンティティ
 │   │   │       └── repository.go     # 通知関連のリポジトリインターフェース
 │   │   │
 │   │   ├── usecase/                  # アプリケーション層（ユースケース）
@@ -40,13 +39,9 @@ memory-tracker/
 │   │   │   ├── list_sites/           # サイト一覧取得
 │   │   │   ├── delete_site/          # サイト削除
 │   │   │   ├── checkin_site/         # 経由リンク踏破時のチェックイン処理
-│   │   │   ├── notify_overdue_sites/ # 未チェックインサイトの通知（メール/Push）
-│   │   │   │   ├── notify_overdue_sites.go
-│   │   │   │   ├── email_template.go
-│   │   │   │   └── push_payload.go
-│   │   │   ├── subscribe_push/       # Push購読の登録
-│   │   │   ├── unsubscribe_push/     # Push購読の解除
-│   │   │   └── update_notification_preferences/  # 通知チャネル設定の更新
+│   │   │   └── notify_overdue_sites/ # 未チェックインサイトのメール通知
+│   │   │       ├── notify_overdue_sites.go
+│   │   │       └── email_template.go
 │   │   │
 │   │   ├── infrastructure/           # インフラ層（外部技術の実装詳細）
 │   │   │   ├── persistence/
@@ -55,13 +50,10 @@ memory-tracker/
 │   │   │   │       ├── site_repository.go
 │   │   │   │       ├── checkin_repository.go
 │   │   │   │       ├── notification_repository.go
-│   │   │   │       ├── push_subscription_repository.go
 │   │   │   │       └── id_generator.go
 │   │   │   ├── notification/
 │   │   │   │   ├── email_sender.go       # メール送信実装
-│   │   │   │   ├── push_sender.go        # Web Push送信実装
-│   │   │   │   ├── fake_email_sender.go  # 開発/テスト用
-│   │   │   │   └── fake_push_sender.go   # 開発/テスト用
+│   │   │   │   └── fake_email_sender.go  # 開発/テスト用
 │   │   │   ├── auth/
 │   │   │   │   ├── google_oauth.go   # Google OAuthクライアント
 │   │   │   │   ├── session_store.go  # Cookieセッションストア（Postgres）
@@ -76,8 +68,7 @@ memory-tracker/
 │   │           ├── handler/
 │   │           │   ├── site_handler.go
 │   │           │   ├── checkin_handler.go   # /go/:siteId のリダイレクトもここ
-│   │           │   ├── auth_handler.go
-│   │           │   └── push_handler.go
+│   │           │   └── auth_handler.go
 │   │           ├── middleware/
 │   │           │   └── auth_middleware.go
 │   │           └── router.go
@@ -92,13 +83,12 @@ memory-tracker/
 ├── frontend/                         # React + Vite + Tailwind + daisyUI SPA（PWA）
 │   ├── public/                       # favicon、PWAアイコン、logo.svg
 │   ├── src/
-│   │   ├── api/                      # APIクライアント（auth / client / push / sites）
+│   │   ├── api/                      # APIクライアント（auth / client / sites）
 │   │   ├── components/               # AddSiteModal、DeleteSiteModal、Footer、
 │   │   │                             # GoogleSignInButton、ThemeSwitcher
 │   │   ├── contexts/
 │   │   │   └── ToastContext.tsx      # トースト通知
-│   │   ├── hooks/                    # useAuth、useSites、usePushSubscription、
-│   │   │                             # useInstallPrompt
+│   │   ├── hooks/                    # useAuth、useSites、useInstallPrompt
 │   │   ├── pages/
 │   │   │   ├── Dashboard.tsx         # メインページ
 │   │   │   ├── Login.tsx
@@ -106,7 +96,7 @@ memory-tracker/
 │   │   │   └── Terms.tsx
 │   │   ├── App.tsx                   # ルーティング、ヘッダー/ユーザーメニュー
 │   │   ├── main.tsx
-│   │   ├── sw.ts                     # Service Worker（Push受信）
+│   │   ├── sw.ts                     # Service Worker（PWAのインストール要件用）
 │   │   ├── index.css                 # Tailwind読み込み
 │   │   └── vite-env.d.ts
 │   ├── index.html
@@ -118,7 +108,6 @@ memory-tracker/
 │   └── Dockerfile
 │
 ├── docs/
-│   ├── push-notification-spec.md     # Push通知の仕様
 │   └── notification-operations.md    # 通知の運用(リトライ・ログ・切り分け)
 │
 ├── docker-compose.yml                # 開発用: backend / frontend / db をまとめて起動

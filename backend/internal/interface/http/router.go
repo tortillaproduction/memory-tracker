@@ -20,7 +20,6 @@ type Dependencies struct {
 	DeleteSiteUsecase    *delete_site.Usecase
 	CheckinSiteUsecase   *checkin_site.Usecase
 	AuthHandler          *handler.AuthHandler
-	PushHandler          *handler.PushHandler
 	SessionStore         *auth.SessionStore
 	CheckinTokenVerifier middleware.CheckinTokenVerifier
 	FrontendURL          string
@@ -43,19 +42,12 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.HandleFunc("GET /api/auth/google/login", deps.AuthHandler.LoginRedirect)
 	mux.HandleFunc("GET /api/auth/google/callback", deps.AuthHandler.Callback)
 	mux.HandleFunc("POST /api/auth/logout", deps.AuthHandler.Logout)
-	mux.HandleFunc("GET /api/push/vapid-public-key", deps.PushHandler.VAPIDPublicKey)
-	// Service Workerからの表示報告。Cookieを持たないため報告トークンで認証する。
-	mux.HandleFunc("POST /api/push/ack", deps.PushHandler.Ack)
 
 	// --- 認証必須 ---
 	mux.Handle("GET /api/auth/me", requireAuth(http.HandlerFunc(deps.AuthHandler.Me)))
 	mux.Handle("GET /api/sites", requireAuth(http.HandlerFunc(siteHandler.List)))
 	mux.Handle("POST /api/sites", requireAuth(http.HandlerFunc(siteHandler.Register)))
 	mux.Handle("DELETE /api/sites/{siteId}", requireAuth(http.HandlerFunc(siteHandler.Delete)))
-	mux.Handle("POST /api/push/subscribe", requireAuth(http.HandlerFunc(deps.PushHandler.Subscribe)))
-	mux.Handle("POST /api/push/unsubscribe", requireAuth(http.HandlerFunc(deps.PushHandler.Unsubscribe)))
-	mux.Handle("GET /api/notification-preferences", requireAuth(http.HandlerFunc(deps.PushHandler.GetPreferences)))
-	mux.Handle("PATCH /api/notification-preferences", requireAuth(http.HandlerFunc(deps.PushHandler.UpdatePreferences)))
 	requireAuthOrCheckinToken := middleware.RequireAuthOrCheckinToken(deps.SessionStore, deps.CheckinTokenVerifier)
 	mux.Handle("GET /go/{siteId}", requireAuthOrCheckinToken(http.HandlerFunc(checkinHandler.CheckInAndRedirect)))
 

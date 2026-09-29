@@ -14,7 +14,7 @@ type EmailSender interface {
 }
 
 // noopEmailSender はRESEND_API_KEY未設定時に使う何もしない実装。
-// プッシュ通知だけで運用する環境や開発時でも、通知バッチ自体は起動できるようにする。
+// 開発時でも、通知バッチ自体は起動できるようにする。
 type noopEmailSender struct{}
 
 func NewNoopEmailSender() EmailSender { return &noopEmailSender{} }

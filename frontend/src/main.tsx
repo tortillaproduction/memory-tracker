@@ -7,8 +7,7 @@ import App from './App';
 import './index.css';
 import { ToastProvider } from './contexts/ToastContext';
 
-// Service Workerを登録する。push/notificationclickの購読(usePushSubscription)は
-// navigator.serviceWorker.ready でこの登録を待ってから行う。
+// Service Workerを登録する(PWAとしてインストール可能にするため)。
 registerSW({ immediate: true });
 
 const queryClient = new QueryClient();

@@ -1,12 +1,10 @@
--- 開発用シード: 指定ユーザーに「期限切れ」サイトと「期限内」サイトを作り、プッシュ通知をONにする。
+-- 開発用シード: 指定ユーザーに「期限切れ」サイトと「期限内」サイトを作り、メール通知をONにする。
 -- 何度実行しても、再び通知対象になる(通知ログを消して作り直す)。
 --
 -- 使い方(リポジトリルートから。emailはGoogleログインに使ったアドレス):
 --   docker compose exec -T db psql -U postgres memorytracker -v email=you@example.com \
 --     < backend/scripts/dev_seed_overdue.sql
 --
--- 注意: プッシュ購読(push_subscriptions)はブラウザ固有なので、ここでは作らない。
--- 先にブラウザでログインし、UIのトグルでPushを有効にしておくこと。
 -- 後片付けは dev_seed_cleanup.sql。
 \set ON_ERROR_STOP on
 
@@ -29,11 +27,11 @@ INSERT INTO check_ins (id, user_id, site_id, checked_at, is_initial) VALUES
   ('dev-seed-ci-overdue-unchecked-initial', :'user_id', 'dev-seed-overdue-unchecked', now() - interval '3 hours', true),
   ('dev-seed-ci-fresh-initial',             :'user_id', 'dev-seed-fresh',             now(),                      true);
 
--- プッシュ通知ON(有効な購読があればメールは止める既定動作)
-INSERT INTO notification_settings (id, user_id, email_enabled, push_enabled, disable_email_when_push_available)
-VALUES ('dev-seed-ns-' || :'user_id', :'user_id', true, true, true)
+-- メール通知ON
+INSERT INTO notification_settings (id, user_id, email_enabled)
+VALUES ('dev-seed-ns-' || :'user_id', :'user_id', true)
 ON CONFLICT (user_id) DO UPDATE
-  SET push_enabled = true, disable_email_when_push_available = true;
+  SET email_enabled = true;
 
 COMMIT;
 
