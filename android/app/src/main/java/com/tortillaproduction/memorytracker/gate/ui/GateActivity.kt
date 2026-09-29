@@ -8,10 +8,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.lifecycleScope
 import com.tortillaproduction.memorytracker.gate.Candidate
-import com.tortillaproduction.memorytracker.gate.DummyCandidates
+import com.tortillaproduction.memorytracker.gate.GateBackend
 import com.tortillaproduction.memorytracker.gate.GateLauncher
 import com.tortillaproduction.memorytracker.gate.GuardStore
+import kotlinx.coroutines.launch
 
 /**
  * 対象アプリを開いた直後に出す全画面のゲート。
@@ -21,9 +26,16 @@ import com.tortillaproduction.memorytracker.gate.GuardStore
 class GateActivity : ComponentActivity() {
 
     private lateinit var store: GuardStore
+    private var openingSiteId by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val candidates = intent.getCandidates()
+        if (candidates.isEmpty()) {
+            finishAndRemoveTask()
+            return
+        }
+
         enableEdgeToEdge()
         store = GuardStore(this)
         GateLauncher.onGateCreated(this)
@@ -35,7 +47,8 @@ class GateActivity : ComponentActivity() {
         setContent {
             GateTheme {
                 GateScreen(
-                    candidates = DummyCandidates.items,
+                    candidates = candidates,
+                    openingSiteId = openingSiteId,
                     onOpen = ::open,
                     onSkip = ::skip,
                 )
@@ -43,20 +56,30 @@ class GateActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * チェックインを記録してからサイトを開く。記録に失敗(タイムアウト2秒を含む)しても、
+     * 候補のURLをそのまま開いてゲートを閉じる(正規の手順の失敗で閉じ込めない)。
+     */
     private fun open(candidate: Candidate) {
+        if (openingSiteId != null) return
+        openingSiteId = candidate.siteId
         store.markDoneToday()
-        try {
-            startActivity(
-                Intent(Intent.ACTION_VIEW, Uri.parse(candidate.url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            )
-        } catch (e: ActivityNotFoundException) {
-            // ブラウザが無くても、ゲートに閉じ込めない
+
+        lifecycleScope.launch {
+            val url = GateBackend.client(this@GateActivity)?.checkin(candidate.siteId) ?: candidate.url
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (e: ActivityNotFoundException) {
+                // ブラウザが無くても、ゲートに閉じ込めない
+            }
+            finishAndRemoveTask()
         }
-        finishAndRemoveTask()
     }
 
+    /** 防御策2: 端末に記録してから閉じ、サーバーへの送信はバックグラウンドで行う。 */
     private fun skip() {
         store.markDismissedToday()
+        GateBackend.sendDismissal(this)
         finishAndRemoveTask()
     }
 
@@ -70,4 +93,24 @@ class GateActivity : ComponentActivity() {
         GateLauncher.onGateDestroyed(this)
         super.onDestroy()
     }
+}
+
+private const val EXTRA_IDS = "candidate_ids"
+private const val EXTRA_NAMES = "candidate_names"
+private const val EXTRA_URLS = "candidate_urls"
+private const val EXTRA_HOURS = "candidate_overdue_hours"
+
+fun Intent.putCandidates(candidates: List<Candidate>): Intent = this
+    .putExtra(EXTRA_IDS, candidates.map { it.siteId }.toTypedArray())
+    .putExtra(EXTRA_NAMES, candidates.map { it.name }.toTypedArray())
+    .putExtra(EXTRA_URLS, candidates.map { it.url }.toTypedArray())
+    .putExtra(EXTRA_HOURS, candidates.map { it.overdueHours }.toDoubleArray())
+
+private fun Intent.getCandidates(): List<Candidate> {
+    val ids = getStringArrayExtra(EXTRA_IDS) ?: return emptyList()
+    val names = getStringArrayExtra(EXTRA_NAMES) ?: return emptyList()
+    val urls = getStringArrayExtra(EXTRA_URLS) ?: return emptyList()
+    val hours = getDoubleArrayExtra(EXTRA_HOURS) ?: return emptyList()
+    if (setOf(ids.size, names.size, urls.size, hours.size).size != 1) return emptyList()
+    return ids.indices.map { Candidate(ids[it], names[it], urls[it], hours[it]) }
 }

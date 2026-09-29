@@ -49,4 +49,14 @@ class RateLimiterTest {
         assertFalse(restored.tryAcquire("a", 1 * m))
         assertEquals(r.snapshot(), restored.snapshot())
     }
+
+    @Test
+    fun `canAcquireは状態を変えずに見込みだけを返す`() {
+        val r = RateLimiter()
+        assertTrue(r.canAcquire("a", 0))
+        assertTrue(r.canAcquire("a", 0))
+        assertTrue(r.tryAcquire("a", 0))
+        assertFalse(r.canAcquire("a", 4 * m))
+        assertTrue(r.canAcquire("b", 4 * m))
+    }
 }

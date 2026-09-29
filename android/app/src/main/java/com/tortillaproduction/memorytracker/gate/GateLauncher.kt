@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
 import com.tortillaproduction.memorytracker.gate.ui.GateActivity
+import com.tortillaproduction.memorytracker.gate.ui.putCandidates
 import java.lang.ref.WeakReference
 
 /**
@@ -47,10 +48,10 @@ object GateLauncher {
         if (current?.get() === activity) current = null
     }
 
-    fun launch(context: Context) {
+    fun launch(context: Context, candidates: List<Candidate>) {
         val intent = Intent(context, GateActivity::class.java).addFlags(
             Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION,
-        )
+        ).putCandidates(candidates)
         context.startActivity(intent)
         GuardStore(context).recordGateShown()
         scheduleAutoClose()

@@ -24,6 +24,16 @@ class RateLimiter(
     var suspendedUntil: Long = 0
         private set
 
+    /**
+     * 発動の見込みがあるかを、状態を変えずに確かめる(停止中か、同じアプリの最小間隔内ならfalse)。
+     * サーバーに候補を問い合わせる前の足切りに使い、実際に出すときに [tryAcquire] で記録する。
+     */
+    fun canAcquire(packageName: String, now: Long): Boolean {
+        if (now < suspendedUntil) return false
+        val last = lastFireByApp[packageName]
+        return last == null || now - last >= perAppInterval
+    }
+
     /** 発動してよければ記録してtrueを返す。 */
     fun tryAcquire(packageName: String, now: Long): Boolean {
         if (now < suspendedUntil) return false

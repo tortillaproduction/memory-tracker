@@ -27,6 +27,13 @@ class GuardStore(context: Context) {
     /** 防御策2: 脱出口を使った記録(その日は再発動しない)。 */
     fun markDismissedToday() = prefs.edit().putString(KEY_DISMISSED_ON, today()).apply()
 
+    /** サーバーへ未送信の解除記録。日付が変わったら送らずに捨てる(サーバーの記録も日単位のため)。 */
+    fun markDismissalPending() = prefs.edit().putString(KEY_PENDING_DISMISSAL, today()).apply()
+
+    fun hasPendingDismissalForToday(): Boolean = prefs.getString(KEY_PENDING_DISMISSAL, null) == today()
+
+    fun clearPendingDismissal() = prefs.edit().remove(KEY_PENDING_DISMISSAL).apply()
+
     fun recordGateShown(now: Long = System.currentTimeMillis()) = prefs.edit().putLong(KEY_LAST_SHOWN, now).apply()
 
     fun lastGateShownAt(): Long? = prefs.getLong(KEY_LAST_SHOWN, 0).takeIf { it > 0 }
@@ -58,6 +65,7 @@ class GuardStore(context: Context) {
         private const val KEY_DONE_ON = "done_on"
         private const val KEY_DISMISSED_ON = "dismissed_on"
         private const val KEY_LAST_SHOWN = "last_shown_at"
+        private const val KEY_PENDING_DISMISSAL = "pending_dismissal_on"
         private const val KEY_LAST_FIRE = "rate_last_fire"
         private const val KEY_RECENT = "rate_recent"
         private const val KEY_SUSPENDED_UNTIL = "rate_suspended_until"

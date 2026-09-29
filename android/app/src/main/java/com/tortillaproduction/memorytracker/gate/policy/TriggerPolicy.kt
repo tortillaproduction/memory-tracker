@@ -14,6 +14,9 @@ class TriggerPolicy(
 ) {
     private var lastForeground: String? = null
 
+    /** 直近の前面アプリ(ゲート画面・通知シェード・キーボードを除く)。 */
+    val currentForeground: String? get() = lastForeground
+
     /**
      * TYPE_WINDOW_STATE_CHANGEDごとに呼ぶ。
      * @param dynamicTransparent 実行時に取得したキーボード(切り替わりとみなさない)

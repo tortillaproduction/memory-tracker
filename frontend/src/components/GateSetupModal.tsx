@@ -33,6 +33,16 @@ export default function GateSetupModal({ onClose }: Props) {
     });
   };
 
+  const handleCopy = async () => {
+    if (!qrPayload) return;
+    try {
+      await navigator.clipboard.writeText(qrPayload);
+      showToast('Setup code copied.', 'success');
+    } catch {
+      showToast('Could not copy.', 'error');
+    }
+  };
+
   const renderQrArea = () => {
     if (qrPayload) {
       return (
@@ -43,6 +53,10 @@ export default function GateSetupModal({ onClose }: Props) {
           <p className="text-xs text-base-content/60 text-center">
             Shown only once. Keep this open until scanned.
           </p>
+          {/* QRを読み取れない場合は、この文字列をアプリの「Setup code」に貼り付けて接続できる */}
+          <button className="btn btn-ghost btn-xs" onClick={handleCopy}>
+            Copy setup code
+          </button>
         </>
       );
     }

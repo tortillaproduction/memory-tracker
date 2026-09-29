@@ -41,6 +41,7 @@ private const val HOLD_TO_SKIP_MILLIS = 3_000L
 @Composable
 fun GateScreen(
     candidates: List<Candidate>,
+    openingSiteId: String?,
     onOpen: (Candidate) -> Unit,
     onSkip: () -> Unit,
 ) {
@@ -61,7 +62,14 @@ fun GateScreen(
             Spacer(Modifier.height(24.dp))
 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.weight(1f)) {
-                candidates.forEach { c -> CandidateCard(c, onOpen = { onOpen(c) }) }
+                candidates.forEach { c ->
+                    CandidateCard(
+                        candidate = c,
+                        opening = openingSiteId == c.siteId,
+                        enabled = openingSiteId == null,
+                        onOpen = { onOpen(c) },
+                    )
+                }
             }
 
             HoldToSkip(onSkip = onSkip, modifier = Modifier.align(Alignment.CenterHorizontally))
@@ -70,7 +78,7 @@ fun GateScreen(
 }
 
 @Composable
-private fun CandidateCard(candidate: Candidate, onOpen: () -> Unit) {
+private fun CandidateCard(candidate: Candidate, opening: Boolean, enabled: Boolean, onOpen: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -93,7 +101,7 @@ private fun CandidateCard(candidate: Candidate, onOpen: () -> Unit) {
                 )
             }
             Spacer(Modifier.width(12.dp))
-            Button(onClick = onOpen) { Text("Open") }
+            Button(onClick = onOpen, enabled = enabled) { Text(if (opening) "Opening…" else "Open") }
         }
     }
 }

@@ -8,10 +8,16 @@ import android.os.SystemClock
 import android.telecom.TelecomManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.inputmethod.InputMethodManager
+import com.tortillaproduction.memorytracker.gate.api.FetchResult
 import com.tortillaproduction.memorytracker.gate.policy.RateLimiter
 import com.tortillaproduction.memorytracker.gate.policy.StartupGrace
 import com.tortillaproduction.memorytracker.gate.policy.TargetApps
 import com.tortillaproduction.memorytracker.gate.policy.TriggerPolicy
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 /**
  * 前面アプリの切り替わりを検知し、対象アプリならゲート画面を出す。
@@ -29,6 +35,10 @@ class GateAccessibilityService : AccessibilityService() {
     private var dynamicTransparent: Set<String> = emptySet()
     private var dynamicExcluded: Set<String> = emptySet()
     private var dynamicExclusionsLoadedAt = 0L
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    /** 候補の問い合わせ中はtrue。問い合わせを重ねない。 */
+    private var fetching = false
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -47,17 +57,41 @@ class GateAccessibilityService : AccessibilityService() {
         if (!policy.onForegroundChanged(pkg, dynamicTransparent, dynamicExcluded)) return
 
         val now = System.currentTimeMillis()
-        if (GateLauncher.isShowing) return
+        if (GateLauncher.isShowing || fetching) return
         if (StartupGrace.isInGrace(SystemClock.elapsedRealtime(), now - lastUpdateTime())) return
         if (store.isFinishedToday(now)) return
-        // 発動制限は最後に判定する(実際に出すときだけ回数を数える)
-        if (!rateLimiter.tryAcquire(pkg, now)) {
-            store.saveRateLimiter(rateLimiter)
-            return
-        }
-        store.saveRateLimiter(rateLimiter)
+        if (!rateLimiter.canAcquire(pkg, now)) return
 
-        GateLauncher.launch(this)
+        fetching = true
+        scope.launch {
+            try {
+                showGateIfNeeded(pkg)
+            } finally {
+                fetching = false
+            }
+        }
+    }
+
+    /**
+     * サーバーに候補を問い合わせ、出すべきときだけゲートを出す。
+     * 未設定・通信失敗・タイムアウト(2秒)・候補0件・今日済みのときは何もせず素通しする。
+     */
+    private suspend fun showGateIfNeeded(pkg: String) {
+        val client = GateBackend.client(this) ?: return
+        GateBackend.flushPendingDismissal(this)
+
+        when (val result = client.fetchCandidates()) {
+            is FetchResult.Show -> {
+                // 問い合わせ中にユーザーが別のアプリへ移っていたら出さない
+                if (policy.currentForeground != pkg || GateLauncher.isShowing) return
+                // 発動制限は実際に出すときに数える(防御策4)
+                val allowed = rateLimiter.tryAcquire(pkg, System.currentTimeMillis())
+                store.saveRateLimiter(rateLimiter)
+                if (allowed) GateLauncher.launch(this, result.candidates)
+            }
+            FetchResult.AlreadyDoneToday -> store.markDoneToday()
+            FetchResult.NoCandidates, is FetchResult.Failed -> Unit
+        }
     }
 
     override fun onInterrupt() = Unit
@@ -65,6 +99,11 @@ class GateAccessibilityService : AccessibilityService() {
     override fun onUnbind(intent: Intent?): Boolean {
         GateLauncher.bindService(null)
         return super.onUnbind(intent)
+    }
+
+    override fun onDestroy() {
+        scope.cancel()
+        super.onDestroy()
     }
 
     private fun lastUpdateTime(): Long = try {
