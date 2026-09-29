@@ -9,7 +9,8 @@
 - **DB**: PostgreSQL
 - **API**: REST（gRPCは今回のスコープではオーバースペックのため見送り）
 - **認証**: Google OAuth + Cookieベースセッション
-- **通知**: メール（Resend）、LINE（Phase 2、未実装）
+- **通知**: メール（Resend）、ゲート（Androidアプリ）、LINE（Phase 2、未実装）
+- **Android（ゲート）**: Kotlin, Jetpack Compose, Retrofit, DataStore（minSdk 26、Playストアでは配布せずAPKを直接渡す）
 - **PWA**: `vite-plugin-pwa`（Service Worker、installable manifest）
 
 ## ディレクトリ構成
@@ -20,6 +21,7 @@
 memory-tracker/
 ├── backend/    # Go + DDD API
 ├── frontend/   # React SPA
+├── android/    # ゲート（Androidアプリ）
 └── docker-compose.yml
 ```
 
@@ -134,6 +136,22 @@ docker compose exec -T db psql -U postgres memorytracker -v email=you@example.co
 
 **通知の運用（失敗時のリトライ、届かないときのログの見方）**: [docs/notification-operations.md](docs/notification-operations.md)を参照してください。
 
+## ゲート（Androidアプリ）
+
+メールは「また来た」で無視されやすいため、SNSや動画アプリを開いた瞬間に、期限切れのサイトを最大3件、全画面で提示する「ゲート」を用意しています。Web版で通知設定をGateに切り替え、表示されるQRコードをアプリで読み取って使います。
+
+- アクセシビリティサービスで前面アプリのpackageNameだけを検知し、画面の内容や通信内容は読みません
+- 通信失敗・タイムアウト（2秒）・候補0件・今日済みのときは、ゲートを出さずにそのまま通します
+- 脱出口（3秒長押し）、2分での自動終了、発動制限、システム画面の除外、OSの設定からの停止という、互いに独立した安全策があります
+- ゲートを使っていても、端末が3日以上APIを使っていなければメールを併用します
+
+| ドキュメント | 内容 |
+|---|---|
+| [docs/gate-setup.md](docs/gate-setup.md) | 使う人向けのセットアップ手順（Webの「Setup guide」リンクの行き先に設定する） |
+| [docs/gate-device-testing.md](docs/gate-device-testing.md) | 実機での動作確認の項目と手順、APKのビルド方法 |
+
+APKのビルドは `android/build.sh`（Docker）で行います。ホストにJDKやAndroid SDKは不要です。
+
 ## PWA
 
 `vite-plugin-pwa`でmanifestとService Workerを用意しており、スマホのホーム画面やデスクトップにアプリとしてインストールできます。Service Workerはインストール要件を満たすためだけに使い、オフラインキャッシュやプッシュ通知は行いません。インストールプロンプトのスマートフォン実機確認にはHTTPSが必要なため、Vercelのプレビューデプロイ等を利用してください。
@@ -177,6 +195,7 @@ docker compose exec -T db psql -U postgres memorytracker -v email=you@example.co
 | `SESSION_SECRET` | 必須 | 開発用とは別の強いランダム値（例: `openssl rand -hex 32`）。チェックインリンクの署名鍵も兼ねる。未設定だと起動に失敗する |
 | `RESEND_API_KEY` | 任意 | 未設定ならメール通知は無効 |
 | `EMAIL_FROM_ADDRESS` / `EMAIL_FROM_NAME` | 任意 | 認証済み独自ドメインのアドレス / 表示名 |
+| `GATE_API_BASE_URL` | 任意 | ゲート（Androidアプリ）がAPIを呼ぶベースURL。QRコードに埋め込まれる。省略時は`FRONTEND_URL`（Vercelのrewriteで`/api/*`がバックエンドに届くため、本番では通常設定不要） |
 
 `LINE_*`と`STRIPE_*`は未実装のため設定不要です。
 
@@ -185,6 +204,7 @@ docker compose exec -T db psql -U postgres memorytracker -v email=you@example.co
 | 変数 | 設定値 |
 |---|---|
 | `VITE_API_BASE_URL` | **設定しない**（上記の理由。ローカル開発時のみ既定で`http://localhost:8080`が使われる） |
+| `VITE_GATE_GUIDE_URL` | 任意。ゲート（Androidアプリ）のセットアップ手順書のURL。設定するとWebのゲート設定画面にリンクを表示する |
 
 ### 手順
 
@@ -310,6 +330,7 @@ make test
 - [x] ストリーク計算・ダッシュボード表示（ユーザー全体 / サイト別）
 - [x] メール通知バッチ（Resend、5分ごとに期限切れサイトを検出・通知）
 - [x] PWA化（ブラウザ通知（Web Push）は効果が薄いため廃止）
+- [x] ゲート（Androidアプリ）: 対象アプリを開いた瞬間に期限切れサイトを提示
 - [ ] LINE通知（UIはトグル用意、実装完了までグレーアウト）
 - [ ] Stripe連携（Phase 2、`plan_type`と`subscriptions`テーブルは用意済み）
 

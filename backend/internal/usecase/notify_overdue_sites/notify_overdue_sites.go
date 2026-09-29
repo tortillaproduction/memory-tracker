@@ -13,6 +13,7 @@ import (
 	"github.com/tortillaproduction/memory-tracker/internal/domain/site"
 	"github.com/tortillaproduction/memory-tracker/internal/domain/user"
 	"github.com/tortillaproduction/memory-tracker/internal/infrastructure/notification"
+	"github.com/tortillaproduction/memory-tracker/internal/usecase/overdue"
 )
 
 // checkinLinkTTL はメールに埋め込むチェックインリンクの有効期限。
@@ -26,6 +27,10 @@ const (
 	baseRetryBackoff = 5 * time.Minute
 	maxRetryBackoff  = 6 * time.Hour
 )
+
+// gateStaleAfter はゲートモードのユーザーでも、ゲート端末がこの期間APIを使っていなければ
+// 未接続(アンインストール・故障など)とみなしてメールを併用するまでの時間。
+const gateStaleAfter = 3 * 24 * time.Hour
 
 type retryState struct {
 	failures int
@@ -54,6 +59,7 @@ type TokenIssuer interface {
 
 type Usecase struct {
 	db          *sql.DB
+	finder      overdue.Finder
 	emailSender notification.EmailSender
 	logger      *slog.Logger
 	frontendURL string
@@ -65,6 +71,7 @@ type Usecase struct {
 
 func NewUsecase(
 	db *sql.DB,
+	finder overdue.Finder,
 	emailSender notification.EmailSender,
 	logger *slog.Logger,
 	frontendURL string,
@@ -72,6 +79,7 @@ func NewUsecase(
 ) *Usecase {
 	return &Usecase{
 		db:          db,
+		finder:      finder,
 		emailSender: emailSender,
 		logger:      logger,
 		frontendURL: frontendURL,
@@ -151,79 +159,31 @@ func (uc *Usecase) Execute(ctx context.Context) error {
 }
 
 // fetchOverdueSites は期限切れかつ今回の通知対象になるサイトを取得する。
+// 期限切れの判定はoverdue.Finderに任せ、ここではメールの送信対象と二重送信防止の条件を加える。
 func (uc *Usecase) fetchOverdueSites(ctx context.Context, now time.Time) ([]*SiteRow, error) {
-	query := `
-		SELECT
-			s.id,
-			s.name,
-			s.url,
-			s.interval_hours,
-			u.id,
-			u.email,
-			u.name,
-			latest_ci.checked_at
-		FROM sites s
-		JOIN users u ON u.id = s.user_id
-		JOIN notification_settings ns ON ns.user_id = u.id
-		-- is_initial=falseの最終チェックイン (一度も開いていない場合はNULL)
-		LEFT JOIN LATERAL (
-			SELECT checked_at
-			FROM check_ins
-			WHERE site_id = s.id AND is_initial = false
-			ORDER BY checked_at DESC
-			LIMIT 1
-		) latest_ci ON true
-		-- 直近のnotification_log (二重送信防止に使う)
-		LEFT JOIN LATERAL (
-			SELECT sent_at
-			FROM notification_logs
-			WHERE site_id = s.id
-			ORDER BY sent_at DESC
-			LIMIT 1
-		) latest_nl ON true
-		WHERE
-			s.is_archived = false
-			AND ns.email_enabled = true
-			-- 期限切れ判定:
-			--  チェックイン済み -> 最終チェックインからinterval_hours以上経過
-			--  未チェックイン -> 登録からinterval_hours以上経過 (is_initial=trueのcheck_in時刻を基準)
-			AND (
-				(latest_ci.checked_at IS NOT NULL
-				  AND latest_ci.checked_at < $1::timestamptz - (s.interval_hours || ' hours')::interval)
-				OR
-				(latest_ci.checked_at IS NULL
-				  AND EXISTS (
-				  	SELECT 1 FROM check_ins
-					WHERE site_id = s.id AND is_initial = true
-					AND checked_at < $1::timestamptz - (s.interval_hours || ' hours')::interval
-				  ))
-			)
-			-- 二重送信防止: 前回通知からinterval_hours以上経過しているか未通知
-			AND (
-				latest_nl.sent_at IS NULL
-				OR latest_nl.sent_at < $1::timestamptz - (s.interval_hours || ' hours')::interval
-			)
-	`
-
-	dbRows, err := uc.db.QueryContext(ctx, query, now)
+	sites, err := uc.finder.ListOverdue(ctx, now, overdue.Filter{
+		ExcludeRecentlyNotified: true,
+		EmailRecipientsOnly:     true,
+		GateActiveSince:         now.Add(-gateStaleAfter),
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer dbRows.Close()
 
-	var result []*SiteRow
-	for dbRows.Next() {
-		r := &SiteRow{}
-		if err := dbRows.Scan(
-			&r.SiteID, &r.SiteName, &r.SiteURL, &r.IntervalHours,
-			&r.UserID, &r.UserEmail, &r.UserName, &r.LastCheckedAt,
-		); err != nil {
-			return nil, err
-		}
-		result = append(result, r)
+	result := make([]*SiteRow, 0, len(sites))
+	for _, s := range sites {
+		result = append(result, &SiteRow{
+			SiteID:        s.SiteID,
+			SiteName:      s.SiteName,
+			SiteURL:       s.SiteURL,
+			IntervalHours: s.IntervalHours,
+			UserID:        s.UserID,
+			UserEmail:     s.UserEmail,
+			UserName:      s.UserName,
+			LastCheckedAt: s.LastCheckedAt,
+		})
 	}
-
-	return result, dbRows.Err()
+	return result, nil
 }
 
 // notifyUser は1ユーザー分の期限切れサイトを1通のメールにまとめて通知し、

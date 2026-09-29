@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"github.com/tortillaproduction/memory-tracker/internal/domain/checkin"
+	"github.com/tortillaproduction/memory-tracker/internal/domain/gate"
 	"github.com/tortillaproduction/memory-tracker/internal/domain/notification"
 	"github.com/tortillaproduction/memory-tracker/internal/domain/site"
 	"github.com/tortillaproduction/memory-tracker/internal/domain/user"
@@ -31,4 +32,12 @@ func (g *ULIDGenerator) NewUserID() user.ID {
 
 func (g *ULIDGenerator) NewNotificationSettingID() notification.ID {
 	return notification.ID(ulid.Make().String())
+}
+
+func (g *ULIDGenerator) NewGateTokenID() gate.TokenID {
+	return gate.TokenID(ulid.Make().String())
+}
+
+func (g *ULIDGenerator) NewGateDismissalID() gate.DismissalID {
+	return gate.DismissalID(ulid.Make().String())
 }

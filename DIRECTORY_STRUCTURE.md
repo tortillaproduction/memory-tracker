@@ -28,8 +28,9 @@ memory-tracker/
 │   │   │   │   ├── checkin.go        # CheckInエンティティ
 │   │   │   │   ├── streak.go         # ストリーク計算ロジック
 │   │   │   │   └── *_test.go         # Ginkgoテスト
+│   │   │   ├── gate/                 # ゲート(Androidアプリ)のトークン・脱出口の記録・日本時間の日付
 │   │   │   └── notification/
-│   │   │       ├── setting.go        # NotificationSettingエンティティ
+│   │   │       ├── setting.go        # NotificationSettingエンティティ（通知モード email / gate を含む）
 │   │   │       └── repository.go     # 通知関連のリポジトリインターフェース
 │   │   │
 │   │   ├── usecase/                  # アプリケーション層（ユースケース）
@@ -38,7 +39,13 @@ memory-tracker/
 │   │   │   ├── register_site/        # サイト登録（登録=チェックイン込み）
 │   │   │   ├── list_sites/           # サイト一覧取得
 │   │   │   ├── delete_site/          # サイト削除
-│   │   │   ├── checkin_site/         # 経由リンク踏破時のチェックイン処理
+│   │   │   ├── checkin_site/         # 経由リンク・ゲートからのチェックイン処理（所有者確認・5分以内の重複防止）
+│   │   │   ├── overdue/              # 期限切れサイトの読み取りモデル（通知とゲートで共有）
+│   │   │   ├── get_gate_candidates/  # ゲートに出す候補（最大3件）と今日済みの判定
+│   │   │   ├── dismiss_gate/         # ゲートの脱出口の記録
+│   │   │   ├── issue_gate_token/     # ゲート用トークンの発行・状態
+│   │   │   ├── authenticate_gate_token/  # Bearerトークンの照合
+│   │   │   ├── update_notification_mode/ # 通知モード(email / gate)の切り替え
 │   │   │   └── notify_overdue_sites/ # 未チェックインサイトのメール通知
 │   │   │       ├── notify_overdue_sites.go
 │   │   │       └── email_template.go
@@ -50,6 +57,9 @@ memory-tracker/
 │   │   │   │       ├── site_repository.go
 │   │   │   │       ├── checkin_repository.go
 │   │   │   │       ├── notification_repository.go
+│   │   │   │       ├── overdue_site_query.go   # 期限切れ判定SQL（唯一の定義）
+│   │   │   │       ├── gate_token_repository.go
+│   │   │   │       ├── gate_dismissal_repository.go
 │   │   │   │       └── id_generator.go
 │   │   │   ├── notification/
 │   │   │   │   ├── email_sender.go       # メール送信実装
@@ -57,7 +67,8 @@ memory-tracker/
 │   │   │   ├── auth/
 │   │   │   │   ├── google_oauth.go   # Google OAuthクライアント
 │   │   │   │   ├── session_store.go  # Cookieセッションストア（Postgres）
-│   │   │   │   └── checkin_token.go  # チェックイン用トークン
+│   │   │   │   ├── checkin_token.go  # チェックイン用トークン
+│   │   │   │   └── gate_token.go     # ゲート用トークンの生成・ハッシュ
 │   │   │   ├── batch/
 │   │   │   │   └── notification_scheduler.go  # 通知の定期実行
 │   │   │   └── migration/
@@ -68,12 +79,15 @@ memory-tracker/
 │   │           ├── handler/
 │   │           │   ├── site_handler.go
 │   │           │   ├── checkin_handler.go   # /go/:siteId のリダイレクトもここ
-│   │           │   └── auth_handler.go
+│   │           │   ├── auth_handler.go
+│   │           │   ├── gate_handler.go          # /api/gate/*
+│   │           │   └── notification_settings_handler.go
 │   │           ├── middleware/
-│   │           │   └── auth_middleware.go
+│   │           │   ├── auth_middleware.go
+│   │           │   └── gate_token_middleware.go # Authorization: Bearer 認証
 │   │           └── router.go
 │   │
-│   ├── migrations/                   # golang-migrate用SQL（up/downのペア、0001〜0007）
+│   ├── migrations/                   # golang-migrate用SQL（up/downのペア、0001〜0009）
 │   │
 │   ├── go.mod
 │   ├── go.sum
@@ -107,8 +121,22 @@ memory-tracker/
 │   ├── .prettierrc.json
 │   └── Dockerfile
 │
+├── android/                          # ゲート（Androidアプリ、Kotlin + Jetpack Compose）
+│   ├── build.sh                      # Dockerでのビルド（APK + 単体テスト）
+│   └── app/src/
+│       ├── main/java/.../gate/
+│       │   ├── policy/               # Androidに依存しない判定ロジック（除外リスト・発動制限など）
+│       │   ├── api/                  # APIクライアント（タイムアウト2秒）とセットアップコード
+│       │   ├── ui/                   # ゲート画面・セットアップ・設定画面（Compose）
+│       │   ├── GateAccessibilityService.kt  # 前面アプリの検知
+│       │   └── GateLauncher.kt       # ゲートの起動と自動終了のタイマー
+│       ├── debug/                    # デバッグビルドのみ平文HTTPを許可
+│       └── test/                     # JVMの単体テスト
+│
 ├── docs/
-│   └── notification-operations.md    # 通知の運用(リトライ・ログ・切り分け)
+│   ├── notification-operations.md    # 通知の運用(リトライ・ログ・切り分け)
+│   ├── gate-setup.md                 # ゲートのセットアップ手順（使う人向け）
+│   └── gate-device-testing.md        # ゲートの実機での動作確認手順
 │
 ├── docker-compose.yml                # 開発用: backend / frontend / db をまとめて起動
 ├── docker-compose.prod.yml           # 本番用

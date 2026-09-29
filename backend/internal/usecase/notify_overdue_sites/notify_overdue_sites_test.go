@@ -21,6 +21,7 @@ import (
 
 	"github.com/tortillaproduction/memory-tracker/internal/infrastructure/auth"
 	"github.com/tortillaproduction/memory-tracker/internal/infrastructure/notification"
+	pg "github.com/tortillaproduction/memory-tracker/internal/infrastructure/persistence/postgres"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/notify_overdue_sites"
 )
 
@@ -28,6 +29,7 @@ import (
 func newUsecase(sender notification.EmailSender) *notify_overdue_sites.Usecase {
 	return notify_overdue_sites.NewUsecase(
 		db,
+		pg.NewOverdueSiteQuery(db),
 		sender,
 		slog.Default(),
 		"https://example.com",
@@ -123,13 +125,26 @@ func cleanupUser(ctx context.Context, userID string) {
 	_, _ = db.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, userID)
 }
 
-// setPushPreferences はPush廃止前に保存された設定(push_enabled/disable_email_when_push_available)を再現する。
-func setPushPreferences(ctx context.Context, userID string, pushEnabled, disableEmailWhenPushAvailable bool) {
-	_, err := db.ExecContext(ctx, `
-		UPDATE notification_settings
-		SET push_enabled = $2, disable_email_when_push_available = $3
-		WHERE user_id = $1
-	`, userID, pushEnabled, disableEmailWhenPushAvailable)
+// sentTo はテスト対象ユーザー宛てのメールだけを返す。通知バッチはDB上の全ユーザーを処理するため、
+// 他のテストパッケージが並行して作ったユーザー宛てのメールを除外する。
+func sentTo(sender *notification.FakeEmailSender, userID string) []notification.SentEmail {
+	var result []notification.SentEmail
+	for _, m := range sender.Sent {
+		if m.To == userID+"@example.com" {
+			result = append(result, m)
+		}
+	}
+	return result
+}
+
+// setGateMode はユーザーを通知モードgateにし、ゲート用トークンを作る。lastUsedAtがnilなら未使用。
+func setGateMode(ctx context.Context, userID string, lastUsedAt *time.Time) {
+	_, err := db.ExecContext(ctx, `UPDATE notification_settings SET mode = 'gate' WHERE user_id = $1`, userID)
+	Expect(err).NotTo(HaveOccurred())
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO gate_tokens (id, user_id, token_hash, last_used_at)
+		VALUES ($1, $2, $3, $4)
+	`, newID("gt"), userID, newID("hash"), lastUsedAt)
 	Expect(err).NotTo(HaveOccurred())
 }
 
@@ -166,9 +181,9 @@ var _ = Describe("短期限バッチによる期限切れ通知", func() {
 
 		Expect(uc.Execute(ctx)).To(Succeed())
 
-		Expect(sender.Sent).To(HaveLen(1))
-		Expect(sender.Sent[0].Subject).To(ContainSubstring("1 site"))
-		Expect(sender.Sent[0].Body).To(ContainSubstring("Test Site"))
+		Expect(sentTo(sender, userID)).To(HaveLen(1))
+		Expect(sentTo(sender, userID)[0].Subject).To(ContainSubstring("1 site"))
+		Expect(sentTo(sender, userID)[0].Body).To(ContainSubstring("Test Site"))
 
 		var logCount int
 		Expect(db.QueryRowContext(ctx,
@@ -189,8 +204,8 @@ var _ = Describe("短期限バッチによる期限切れ通知", func() {
 
 		Expect(uc.Execute(ctx)).To(Succeed())
 
-		Expect(sender.Sent).To(HaveLen(1))
-		Expect(sender.Sent[0].Body).To(ContainSubstring("Not visited yet"))
+		Expect(sentTo(sender, userID)).To(HaveLen(1))
+		Expect(sentTo(sender, userID)[0].Body).To(ContainSubstring("Not visited yet"))
 	})
 
 	It("期限内の場合、メールは送信されない", func() {
@@ -205,7 +220,7 @@ var _ = Describe("短期限バッチによる期限切れ通知", func() {
 		uc := newUsecase(sender)
 
 		Expect(uc.Execute(ctx)).To(Succeed())
-		Expect(sender.Sent).To(BeEmpty())
+		Expect(sentTo(sender, userID)).To(BeEmpty())
 	})
 
 	It("直近の通知から期限が未経過の場合、二重送信しない", func() {
@@ -221,23 +236,52 @@ var _ = Describe("短期限バッチによる期限切れ通知", func() {
 		uc := newUsecase(sender)
 
 		Expect(uc.Execute(ctx)).To(Succeed())
-		Expect(sender.Sent).To(BeEmpty())
+		Expect(sentTo(sender, userID)).To(BeEmpty())
 	})
 
-	It("Push廃止前にメール抑制の設定だったユーザーにも、メールが送信される", func() {
-		userID = createTestUser(ctx, true)
-		siteID := createTestSite(ctx, userID, 1)
-		setPushPreferences(ctx, userID, true, true)
+	Describe("通知モードによる分岐", func() {
+		var sender *notification.FakeEmailSender
 
-		now := time.Now()
-		insertCheckIn(ctx, userID, siteID, now.Add(-3*time.Hour), true)
-		insertCheckIn(ctx, userID, siteID, now.Add(-2*time.Hour), false)
+		BeforeEach(func() {
+			userID = createTestUser(ctx, true)
+			siteID := createTestSite(ctx, userID, 1)
+			now := time.Now()
+			insertCheckIn(ctx, userID, siteID, now.Add(-3*time.Hour), true)
+			insertCheckIn(ctx, userID, siteID, now.Add(-2*time.Hour), false)
+			sender = notification.NewFakeEmailSender()
+		})
 
-		sender := notification.NewFakeEmailSender()
-		uc := newUsecase(sender)
+		It("ゲートモードで、ゲート端末が直近にAPIを使っていればメールを送らない", func() {
+			recent := time.Now().Add(-1 * time.Hour)
+			setGateMode(ctx, userID, &recent)
 
-		Expect(uc.Execute(ctx)).To(Succeed())
+			Expect(newUsecase(sender).Execute(ctx)).To(Succeed())
+			Expect(sentTo(sender, userID)).To(BeEmpty())
+		})
 
-		Expect(sender.Sent).To(HaveLen(1))
+		It("ゲートモードでも、ゲート端末が3日以上APIを使っていなければメールを併用する", func() {
+			stale := time.Now().Add(-73 * time.Hour)
+			setGateMode(ctx, userID, &stale)
+
+			Expect(newUsecase(sender).Execute(ctx)).To(Succeed())
+			Expect(sentTo(sender, userID)).To(HaveLen(1))
+		})
+
+		It("ゲートモードでも、トークンを一度も使っていなければメールを送る", func() {
+			setGateMode(ctx, userID, nil)
+
+			Expect(newUsecase(sender).Execute(ctx)).To(Succeed())
+			Expect(sentTo(sender, userID)).To(HaveLen(1))
+		})
+
+		It("メールモードなら、ゲート用トークンが使われていてもメールを送る", func() {
+			recent := time.Now().Add(-1 * time.Hour)
+			setGateMode(ctx, userID, &recent)
+			_, err := db.ExecContext(ctx, `UPDATE notification_settings SET mode = 'email' WHERE user_id = $1`, userID)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(newUsecase(sender).Execute(ctx)).To(Succeed())
+			Expect(sentTo(sender, userID)).To(HaveLen(1))
+		})
 	})
 })

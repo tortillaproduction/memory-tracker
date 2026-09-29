@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import ThemeSwitcher from './components/ThemeSwitcher';
 import Footer from './components/Footer';
@@ -11,6 +11,12 @@ import Login from './pages/Login';
 import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
+import {
+  useNotificationSettings,
+  useUpdateNotificationMode,
+} from './hooks/useGate';
+import GateSetupModal from './components/GateSetupModal';
+import type { NotificationMode } from './api/gate';
 
 // メニュー項目の先頭に付ける共通アイコン(線画SVG)。
 function MenuIcon({ children }: { children: ReactNode }) {
@@ -62,6 +68,28 @@ function App() {
   const { user, isLoading, isAuthenticated, logout } = useAuth();
   const { showToast } = useToast();
   const install = useInstallPrompt();
+  const settings = useNotificationSettings(isAuthenticated);
+  const updateMode = useUpdateNotificationMode();
+  const [gateSetupOpen, setGateSetupOpen] = useState(false);
+  // daisyUIのドロップダウンはフォーカス中だけ開くため、フォーカスを外して閉じてからモーダルを開く。
+  const openGateSetup = () => {
+    (document.activeElement as HTMLElement | null)?.blur();
+    setGateSetupOpen(true);
+  };
+  const mode = settings.data?.mode;
+  const modeDisabled = !settings.data || updateMode.isPending;
+
+  // ゲートに切り替えたら、続けてQRコードを読み取れるようセットアップ画面を開く。
+  const selectMode = (next: NotificationMode) => {
+    if (next === mode || modeDisabled) return;
+    updateMode.mutate(next, {
+      onSuccess: () => {
+        if (next === 'gate') openGateSetup();
+      },
+      onError: () =>
+        showToast('Could not change notification settings.', 'error'),
+    });
+  };
 
   // ログイン/ログアウトはページ全体のリロードを伴うため、直前にsessionStorageへ
   // 立てておいたフラグをマウント時に確認し、あれば一度だけトースト表示する。
@@ -136,6 +164,92 @@ function App() {
                         <li className="menu-title text-xs px-2.5 py-1 font-normal text-base-content">
                           <span className="flex items-center gap-2">
                             <MenuIcon>
+                              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                              <path d="M10.3 21a1.9 1.9 0 0 0 3.4 0" />
+                            </MenuIcon>
+                            Notifications
+                          </span>
+                        </li>
+                        <li>
+                          <div className="active:bg-transparent! active:text-inherit! focus:bg-transparent!">
+                            <div
+                              className="flex items-center justify-center gap-3 px-2 py-1 ml-8"
+                              onMouseDown={(e) => e.preventDefault()}
+                            >
+                              <button
+                                type="button"
+                                className={`flex items-center gap-1 ${
+                                  mode === 'email'
+                                    ? 'font-semibold'
+                                    : 'text-base-content/50'
+                                }`}
+                                disabled={modeDisabled}
+                                onClick={() => selectMode('email')}
+                              >
+                                <MenuIcon>
+                                  <rect
+                                    x="3"
+                                    y="5"
+                                    width="18"
+                                    height="14"
+                                    rx="2"
+                                  />
+                                  <path d="m3 7 9 6 9-6" />
+                                </MenuIcon>
+                                Email
+                              </button>
+                              {/* 無効時も丸(つまみ)を塗りつぶして表示し、選択側へ寄せる */}
+                              <input
+                                type="checkbox"
+                                className="toggle toggle-sm toggle-primary [--input-color:var(--color-primary)] disabled:before:bg-primary"
+                                checked={mode === 'gate'}
+                                disabled={modeDisabled}
+                                onChange={(e) =>
+                                  selectMode(
+                                    e.target.checked ? 'gate' : 'email',
+                                  )
+                                }
+                              />
+                              <button
+                                type="button"
+                                className={`flex items-center gap-1 ${
+                                  mode === 'gate'
+                                    ? 'font-semibold'
+                                    : 'text-base-content/50'
+                                }`}
+                                disabled={modeDisabled}
+                                onClick={() => selectMode('gate')}
+                              >
+                                <MenuIcon>
+                                  <rect
+                                    x="7"
+                                    y="2"
+                                    width="10"
+                                    height="20"
+                                    rx="2"
+                                  />
+                                  <path d="M11 18h2" />
+                                </MenuIcon>
+                                Gate
+                              </button>
+                            </div>
+                          </div>
+                        </li>
+                        {mode === 'gate' && (
+                          <li>
+                            <button
+                              className="justify-center ml-8"
+                              onClick={openGateSetup}
+                            >
+                              Set up Gate (Android)
+                            </button>
+                          </li>
+                        )}
+
+                        <div className="my-2 h-px bg-base-content/10"></div>
+                        <li className="menu-title text-xs px-2.5 py-1 font-normal text-base-content">
+                          <span className="flex items-center gap-2">
+                            <MenuIcon>
                               <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
                             </MenuIcon>
                             Bookmarklet
@@ -206,6 +320,10 @@ function App() {
             </div>
 
             {!isLoading && !isAuthenticated && <Footer />}
+
+            {isAuthenticated && gateSetupOpen && (
+              <GateSetupModal onClose={() => setGateSetupOpen(false)} />
+            )}
           </div>
         }
       />

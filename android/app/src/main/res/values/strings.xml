@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Memory Tracker Gate</string>
+    <string name="accessibility_label">Memory Tracker Gate</string>
+    <string name="accessibility_description">Shows overdue sites when you open selected apps. Reads only which app is in front. Never reads screen content.</string>
+</resources>

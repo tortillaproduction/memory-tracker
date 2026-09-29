@@ -20,6 +20,9 @@ type Dependencies struct {
 	DeleteSiteUsecase    *delete_site.Usecase
 	CheckinSiteUsecase   *checkin_site.Usecase
 	AuthHandler          *handler.AuthHandler
+	GateHandler          *handler.GateHandler
+	NotificationSettings *handler.NotificationSettingsHandler
+	GateAuthenticator    middleware.GateTokenAuthenticator
 	SessionStore         *auth.SessionStore
 	CheckinTokenVerifier middleware.CheckinTokenVerifier
 	FrontendURL          string
@@ -48,6 +51,17 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.Handle("GET /api/sites", requireAuth(http.HandlerFunc(siteHandler.List)))
 	mux.Handle("POST /api/sites", requireAuth(http.HandlerFunc(siteHandler.Register)))
 	mux.Handle("DELETE /api/sites/{siteId}", requireAuth(http.HandlerFunc(siteHandler.Delete)))
+	mux.Handle("GET /api/notification-settings", requireAuth(http.HandlerFunc(deps.NotificationSettings.Get)))
+	mux.Handle("PATCH /api/notification-settings", requireAuth(http.HandlerFunc(deps.NotificationSettings.Update)))
+	mux.Handle("GET /api/gate/token", requireAuth(http.HandlerFunc(deps.GateHandler.TokenStatus)))
+	mux.Handle("POST /api/gate/token", requireAuth(http.HandlerFunc(deps.GateHandler.IssueToken)))
+
+	// --- ゲート(Androidアプリ)用: Authorization: Bearer <token> で認証 ---
+	requireGateToken := middleware.RequireGateToken(deps.GateAuthenticator)
+	mux.Handle("GET /api/gate/candidates", requireGateToken(http.HandlerFunc(deps.GateHandler.Candidates)))
+	mux.Handle("POST /api/gate/checkin", requireGateToken(http.HandlerFunc(deps.GateHandler.Checkin)))
+	mux.Handle("POST /api/gate/dismiss", requireGateToken(http.HandlerFunc(deps.GateHandler.Dismiss)))
+
 	requireAuthOrCheckinToken := middleware.RequireAuthOrCheckinToken(deps.SessionStore, deps.CheckinTokenVerifier)
 	mux.Handle("GET /go/{siteId}", requireAuthOrCheckinToken(http.HandlerFunc(checkinHandler.CheckInAndRedirect)))
 

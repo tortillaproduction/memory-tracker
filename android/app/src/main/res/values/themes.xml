@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Gate" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#1B0F30</item>
+        <item name="android:statusBarColor">#1B0F30</item>
+    </style>
+</resources>

@@ -27,6 +27,27 @@ func (r *checkinRepository) Save(ctx context.Context, c *checkin.CheckIn) error 
 	return err
 }
 
+func (r *checkinRepository) SaveUnlessRecent(ctx context.Context, c *checkin.CheckIn, window time.Duration) (bool, error) {
+	// 判定と挿入を1文にして、同時リクエストで両方が挿入される余地を小さくする。
+	res, err := r.db.ExecContext(ctx, `
+		INSERT INTO check_ins (id, user_id, site_id, checked_at, is_initial)
+		SELECT $1, $2, $3, $4::timestamptz, $5
+		WHERE NOT EXISTS (
+			SELECT 1 FROM check_ins
+			WHERE site_id = $3 AND is_initial = false
+			  AND checked_at > $4::timestamptz - make_interval(secs => $6)
+		)
+	`, c.ID(), c.UserID(), c.SiteID(), c.CheckedAt(), c.IsInitial(), window.Seconds())
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
 func (r *checkinRepository) FindLatestBySiteID(ctx context.Context, siteID site.ID) (*checkin.CheckIn, error) {
 	row := r.db.QueryRowContext(ctx, `
 		SELECT id, user_id, site_id, checked_at, is_initial
