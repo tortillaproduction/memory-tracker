@@ -1,112 +1,229 @@
 package com.tortillaproduction.memorytracker.gate.ui
 
-import android.content.ComponentName
-import android.content.Context
-import android.content.Intent
 import android.os.Bundle
-import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.tortillaproduction.memorytracker.gate.CredentialsStore
-import com.tortillaproduction.memorytracker.gate.GateAccessibilityService
 import com.tortillaproduction.memorytracker.gate.GateBackend
 import com.tortillaproduction.memorytracker.gate.GateLauncher
 import com.tortillaproduction.memorytracker.gate.GuardStore
+import com.tortillaproduction.memorytracker.gate.SystemSettings
+import com.tortillaproduction.memorytracker.gate.TargetStore
 import com.tortillaproduction.memorytracker.gate.api.FetchResult
+import com.tortillaproduction.memorytracker.gate.api.GateClient
 import com.tortillaproduction.memorytracker.gate.api.SetupCode
+import com.tortillaproduction.memorytracker.gate.policy.TargetCandidates
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 
 /**
- * 設定画面(フェーズ3-1の最小構成)。サービスの稼働状態、最後にゲートが出た日時、
- * 防御策6(OSの設定からサービスを止める手順)を表示する。
- * 3-3でチェックイン式のセットアップ画面に置き換える。
+ * アプリの入口。セットアップが終わっていなければチェックリスト式のセットアップを、
+ * 終わっていれば設定画面を出す。設定画面からセットアップをやり直すこともできる。
+ *
+ * OSの設定画面から戻ったとき(onResume)に、各ステップの完了を自動で判定し直す。
  */
 class MainActivity : ComponentActivity() {
 
-    private var status by mutableStateOf(Status())
+    private lateinit var targetStore: TargetStore
+    private lateinit var guardStore: GuardStore
+
+    private var inSetup by mutableStateOf(false)
+    private var step by mutableStateOf(SetupStep.Connect)
+    private var setup by mutableStateOf(SetupState())
+    private var settings by mutableStateOf(SettingsState())
     private var message by mutableStateOf<String?>(null)
+
+    /** ④でユーザーがチェックを変えたか。変えていれば、画面を再描画してもその選択を保つ。 */
+    private var selectionTouched = false
+
+    /** ⑤を開いた時刻。これ以降にゲートが出たら「出た」と判定する。 */
+    private var testStartedAt = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        targetStore = TargetStore(this)
+        guardStore = GuardStore(this)
+        inSetup = !targetStore.isSetupCompleted()
+
         setContent {
             GateTheme {
-                SettingsScreen(
-                    status = status,
-                    message = message,
-                    onSaveSetupCode = ::saveSetupCode,
-                    onRemoveSetup = ::removeSetup,
-                    onOpenAccessibilitySettings = {
-                        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                    },
-                    onTryGate = ::tryGate,
-                )
+                if (inSetup) {
+                    SetupScreen(
+                        state = setup,
+                        step = step,
+                        message = message,
+                        onSelectStep = ::goTo,
+                        actions = setupActions,
+                    )
+                } else {
+                    SettingsScreen(state = settings, message = message, actions = settingsActions)
+                }
+            }
+        }
+
+        if (inSetup) {
+            lifecycleScope.launch {
+                refresh()
+                step = SetupStep.entries.firstOrNull { !setup.isDone(it) } ?: SetupStep.Test
             }
         }
     }
 
     override fun onResume() {
         super.onResume()
-        refresh()
+        lifecycleScope.launch { refresh() }
     }
 
-    private fun refresh() {
-        lifecycleScope.launch { status = loadStatus(this@MainActivity) }
+    private suspend fun refresh() {
+        val connected = CredentialsStore(this).current()
+        val candidates = TargetCandidates.select(SystemSettings.launchableApps(this))
+        val selected = when {
+            selectionTouched -> setup.selected
+            targetStore.isConfigured() -> targetStore.targets()
+            else -> candidates.map { it.packageName }.toSet() // 初期は候補をすべてオン
+        }
+        setup = setup.copy(
+            connected = connected != null,
+            accessibilityOn = SystemSettings.isAccessibilityEnabled(this),
+            batteryExempt = SystemSettings.isIgnoringBatteryOptimizations(this),
+            appsSaved = targetStore.isConfigured(),
+            gateSeen = testStartedAt > 0 && (guardStore.lastGateShownAt() ?: 0) >= testStartedAt,
+            candidates = candidates,
+            selected = selected,
+            maker = SystemSettings.maker,
+        )
+        val now = System.currentTimeMillis()
+        settings = SettingsState(
+            serviceEnabled = setup.accessibilityOn,
+            server = connected?.baseUrl,
+            lastGateShown = guardStore.lastGateShownAt()?.let { format(it) },
+            suspendedUntil = guardStore.suspendedUntil().takeIf { it > now }?.let { format(it) },
+            targetCount = targetStore.targets().size,
+            maker = SystemSettings.maker,
+        )
     }
 
+    private fun goTo(next: SetupStep) {
+        message = null
+        step = next
+        if (next == SetupStep.Test) enterTest()
+    }
+
+    // --- セットアップ ---
+
+    private val setupActions = SetupActions(
+        scanQr = ::scanQr,
+        saveSetupCode = ::saveSetupCode,
+        openAccessibility = { SystemSettings.openAccessibilitySettings(this) },
+        openAppInfo = { SystemSettings.openAppDetails(this) },
+        requestBattery = { SystemSettings.requestIgnoreBatteryOptimizations(this) },
+        toggleApp = { pkg, on ->
+            selectionTouched = true
+            setup = setup.copy(selected = if (on) setup.selected + pkg else setup.selected - pkg)
+        },
+        saveApps = {
+            targetStore.save(setup.selected)
+            selectionTouched = false
+            setup = setup.copy(appsSaved = true)
+            goTo(SetupStep.Test)
+        },
+        launchApp = { pkg ->
+            if (!SystemSettings.launchApp(this, pkg)) message = "Could not open the app."
+        },
+        finish = {
+            targetStore.setSetupCompleted(true)
+            if (!targetStore.isConfigured()) targetStore.save(setup.selected)
+            inSetup = false
+            message = null
+            lifecycleScope.launch { refresh() }
+        },
+    )
+
+    /** ①: WebのQRコードを読み取る。カメラ権限は不要(スキャン画面はGoogle Play開発者サービスが出す)。 */
+    private fun scanQr() {
+        val options = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
+        GmsBarcodeScanning.getClient(this, options).startScan()
+            .addOnSuccessListener { saveSetupCode(it.rawValue.orEmpty()) }
+            .addOnFailureListener { message = "Could not scan. Paste the setup code instead." }
+    }
+
+    /** 読み取ったコードを検証してから保存する。無効なトークン(再発行済みなど)は保存しない。 */
     private fun saveSetupCode(raw: String) {
         val credentials = SetupCode.parse(raw)
         if (credentials == null) {
-            message = "Invalid setup code."
+            message = "This is not a Memory Tracker setup code."
             return
         }
         lifecycleScope.launch {
+            val check = GateClient(credentials).fetchCandidates()
+            if (check == FetchResult.Failed(FetchResult.Reason.Unauthorized)) {
+                message = "This code is no longer valid. Create a new QR code on the web."
+                return@launch
+            }
             CredentialsStore(this@MainActivity).save(credentials)
-            message = "Connected."
+            message = if (check is FetchResult.Failed) "Saved. Could not reach the server right now." else "Connected."
             refresh()
         }
     }
 
-    private fun removeSetup() {
+    /** ⑤: いまゲートが出る状況か(期限切れのサイトがあるか、今日済みでないか)をサーバーに確認する。 */
+    private fun enterTest() {
+        testStartedAt = System.currentTimeMillis()
+        setup = setup.copy(gateSeen = false, serverCheck = "Checking…")
         lifecycleScope.launch {
-            CredentialsStore(this@MainActivity).clear()
-            message = "Setup removed."
-            refresh()
+            val local = guardStore.isFinishedToday()
+            val text = when (val r = GateBackend.client(this@MainActivity)?.fetchCandidates()) {
+                null -> "Not connected. Go back to step 1."
+                is FetchResult.Show ->
+                    if (local) {
+                        "You opened a site or skipped today, so the gate stays off until tomorrow."
+                    } else {
+                        "${r.candidates.size} overdue site(s). The gate will show."
+                    }
+                FetchResult.AlreadyDoneToday -> "You already checked in today, so the gate stays off until tomorrow."
+                FetchResult.NoCandidates -> "No overdue sites right now, so the gate won't show."
+                is FetchResult.Failed -> "Could not reach the server (${r.reason}), so the gate won't show."
+            }
+            setup = setup.copy(serverCheck = text)
         }
     }
+
+    // --- 設定画面 ---
+
+    private val settingsActions = SettingsActions(
+        tryGate = ::tryGate,
+        runSetup = {
+            inSetup = true
+            message = null
+            goTo(SetupStep.Connect)
+        },
+        openAccessibility = { SystemSettings.openAccessibilitySettings(this) },
+        openAppInfo = { SystemSettings.openAppDetails(this) },
+        removeSetup = {
+            lifecycleScope.launch {
+                CredentialsStore(this@MainActivity).clear()
+                message = "Disconnected."
+                refresh()
+            }
+        },
+    )
 
     /** 動作確認用: 端末側の制限(今日済み・発動制限)を無視して、サーバーの候補でゲートを出す。 */
     private fun tryGate() {
         lifecycleScope.launch {
             val client = GateBackend.client(this@MainActivity)
             if (client == null) {
-                message = "Not connected. Save a setup code first."
+                message = "Not connected. Run setup first."
                 return@launch
             }
             message = when (val r = client.fetchCandidates()) {
@@ -120,106 +237,11 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-}
 
-data class Status(
-    val serviceEnabled: Boolean = false,
-    val server: String? = null,
-    val lastGateShown: String? = null,
-    val suspendedUntil: String? = null,
-)
+    private fun format(millis: Long): String = timeFormat.format(Instant.ofEpochMilli(millis))
 
-private val timeFormat: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(GuardStore.ZONE)
-
-private suspend fun loadStatus(context: Context): Status {
-    val store = GuardStore(context)
-    val now = System.currentTimeMillis()
-    return Status(
-        serviceEnabled = isServiceEnabled(context),
-        server = CredentialsStore(context).current()?.baseUrl,
-        lastGateShown = store.lastGateShownAt()?.let { timeFormat.format(Instant.ofEpochMilli(it)) },
-        suspendedUntil = store.suspendedUntil().takeIf { it > now }?.let { timeFormat.format(Instant.ofEpochMilli(it)) },
-    )
-}
-
-/** OSの設定でこのアクセシビリティサービスが有効になっているか。 */
-fun isServiceEnabled(context: Context): Boolean {
-    val enabled = Settings.Secure.getString(
-        context.contentResolver,
-        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-    ) ?: return false
-    val me = ComponentName(context, GateAccessibilityService::class.java)
-    return enabled.split(':').any { ComponentName.unflattenFromString(it) == me }
-}
-
-@Composable
-private fun SettingsScreen(
-    status: Status,
-    message: String?,
-    onSaveSetupCode: (String) -> Unit,
-    onRemoveSetup: () -> Unit,
-    onOpenAccessibilitySettings: () -> Unit,
-    onTryGate: () -> Unit,
-) {
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .safeDrawingPadding()
-                .verticalScroll(rememberScrollState())
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text("Memory Tracker Gate", style = MaterialTheme.typography.headlineSmall)
-
-            Text("Service: ${if (status.serviceEnabled) "On" else "Off"}")
-            Text("Server: ${status.server ?: "Not connected"}")
-            Text("Last gate: ${status.lastGateShown ?: "Never"}")
-            status.suspendedUntil?.let { Text("Paused until $it (too many gates)") }
-
-            Button(onClick = onTryGate, modifier = Modifier.fillMaxWidth()) {
-                Text("Try the gate now")
-            }
-            message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
-
-            SetupCodeSection(connected = status.server != null, onSave = onSaveSetupCode, onRemove = onRemoveSetup)
-
-            Text("Stop the gate", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
-            Text(
-                "You can turn it off at any time:\n" +
-                    "Settings > Accessibility > Memory Tracker Gate > Off",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            OutlinedButton(onClick = onOpenAccessibilitySettings, modifier = Modifier.fillMaxWidth()) {
-                Text("Open accessibility settings")
-            }
-        }
-    }
-}
-
-/** QRコードの代わりにセットアップコード(QRの中身)を貼り付けて接続する。 */
-@Composable
-private fun SetupCodeSection(connected: Boolean, onSave: (String) -> Unit, onRemove: () -> Unit) {
-    var code by remember { mutableStateOf("") }
-    Text("Setup code", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
-    OutlinedTextField(
-        value = code,
-        onValueChange = { code = it },
-        label = { Text("Paste the setup code") },
-        modifier = Modifier.fillMaxWidth(),
-        minLines = 2,
-    )
-    Button(
-        onClick = {
-            onSave(code)
-            code = ""
-        },
-        enabled = code.isNotBlank(),
-        modifier = Modifier.fillMaxWidth(),
-    ) { Text("Save") }
-    if (connected) {
-        TextButton(onClick = onRemove) { Text("Remove setup") }
+    private companion object {
+        val timeFormat: DateTimeFormatter =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(GuardStore.ZONE)
     }
 }

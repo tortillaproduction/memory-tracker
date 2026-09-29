@@ -10,7 +10,8 @@ package com.tortillaproduction.memorytracker.gate.policy
  */
 class TriggerPolicy(
     private val ownPackage: String,
-    private val targets: Set<String>,
+    /** 対象アプリ。ユーザーが設定画面で変更しても即時反映されるよう、判定のたびに読む。 */
+    private val targets: () -> Set<String>,
 ) {
     private var lastForeground: String? = null
 
@@ -45,6 +46,6 @@ class TriggerPolicy(
         if (packageName == previous) {
             return false
         }
-        return packageName in targets
+        return packageName in targets()
     }
 }

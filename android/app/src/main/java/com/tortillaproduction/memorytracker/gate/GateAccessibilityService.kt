@@ -11,7 +11,6 @@ import android.view.inputmethod.InputMethodManager
 import com.tortillaproduction.memorytracker.gate.api.FetchResult
 import com.tortillaproduction.memorytracker.gate.policy.RateLimiter
 import com.tortillaproduction.memorytracker.gate.policy.StartupGrace
-import com.tortillaproduction.memorytracker.gate.policy.TargetApps
 import com.tortillaproduction.memorytracker.gate.policy.TriggerPolicy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,7 +41,8 @@ class GateAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        policy = TriggerPolicy(ownPackage = packageName, targets = TargetApps.defaults)
+        val targetStore = TargetStore(this)
+        policy = TriggerPolicy(ownPackage = packageName) { targetStore.targets() }
         store = GuardStore(this)
         rateLimiter = store.loadRateLimiter()
         refreshDynamicExclusions(force = true)

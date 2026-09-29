@@ -10,7 +10,7 @@ class TriggerPolicyTest {
     private val youtube = "com.google.android.youtube"
     private val launcher = "com.google.android.apps.nexuslauncher"
 
-    private fun policy() = TriggerPolicy(own, setOf(instagram, youtube))
+    private fun policy() = TriggerPolicy(own) { setOf(instagram, youtube) }
 
     @Test
     fun `対象アプリに切り替わったら発動する`() {
@@ -56,7 +56,7 @@ class TriggerPolicyTest {
     fun `除外リストは対象リストより優先する`() {
         val settings = "com.android.settings"
         val dialer = "com.example.dialer"
-        val p = TriggerPolicy(own, setOf(settings, dialer, instagram))
+        val p = TriggerPolicy(own) { setOf(settings, dialer, instagram) }
         assertFalse(p.onForegroundChanged(settings))
         assertFalse(p.onForegroundChanged(dialer, dynamicExcluded = setOf(dialer)))
     }

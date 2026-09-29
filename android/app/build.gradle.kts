@@ -44,6 +44,8 @@ dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+    // セットアップ①のQR読み取り(カメラ権限不要。スキャン画面はGoogle Play開発者サービスが提供)
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
 
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-kotlinx-serialization:2.11.0")
