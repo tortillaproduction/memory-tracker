@@ -109,19 +109,9 @@ func main() {
 
 	authHandler := handler.NewAuthHandler(googleClient, sessionStore, googleLoginUC, userRepo, frontendURL, logger)
 
-	// --- プッシュ通知のセットアップ ---
-	// VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEYが未設定の場合、プッシュ送信はno-op実装にフォールバックする。
-	// これにより設定/購読APIやDB周りは常に動作しつつ、実際のプッシュ配信だけが無効化される
-	// (=既存のメール専用環境でも安全に起動できる)。
+	// --- プッシュ購読API(廃止予定) ---
+	// 通知バッチはPushを送らない。旧フロントエンドが呼ぶ購読APIだけを当面残す。
 	vapidPublicKey := os.Getenv("VAPID_PUBLIC_KEY")
-	vapidPrivateKey := os.Getenv("VAPID_PRIVATE_KEY")
-	var pushSender notification.PushSender
-	if vapidPublicKey != "" && vapidPrivateKey != "" {
-		pushSender = notification.NewWebPushSender(vapidPublicKey, vapidPrivateKey, getEnvOrDefault("VAPID_SUBJECT", "mailto:support@example.com"), logger)
-	} else {
-		logger.Warn("VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY is not set, push notifications are disabled")
-		pushSender = notification.NewNoopPushSender()
-	}
 
 	subscribePushUC := subscribe_push.NewUsecase(pushSubRepo, notificationRepo, idGen)
 	unsubscribePushUC := unsubscribe_push.NewUsecase(pushSubRepo, notificationRepo)
@@ -147,7 +137,7 @@ func main() {
 		emailSender = notification.NewNoopEmailSender()
 	}
 
-	notifyUC := notify_overdue_sites.NewUsecase(db, emailSender, pushSender, pushSubRepo, notificationRepo, logger, frontendURL, checkinTokenIssuer).WithPushDeliveryTracker(pushTracker)
+	notifyUC := notify_overdue_sites.NewUsecase(db, emailSender, logger, frontendURL, checkinTokenIssuer)
 	scheduler := batch.NewNotificationScheduler(notifyUC, notificationInterval(logger), logger)
 	schedulerDone := scheduler.Start(ctx)
 

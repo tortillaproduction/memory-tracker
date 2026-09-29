@@ -21,18 +21,14 @@ import (
 
 	"github.com/tortillaproduction/memory-tracker/internal/infrastructure/auth"
 	"github.com/tortillaproduction/memory-tracker/internal/infrastructure/notification"
-	pg "github.com/tortillaproduction/memory-tracker/internal/infrastructure/persistence/postgres"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/notify_overdue_sites"
 )
 
-// newUsecase はテスト用にpushSender/pushSubRepo/settingRepoを実DB実装+フェイクで組み立てる。
-func newUsecase(sender notification.EmailSender, pushSender notification.PushSender) *notify_overdue_sites.Usecase {
+// newUsecase はテスト用に実DBとフェイクのメール送信で組み立てる。
+func newUsecase(sender notification.EmailSender) *notify_overdue_sites.Usecase {
 	return notify_overdue_sites.NewUsecase(
 		db,
 		sender,
-		pushSender,
-		pg.NewPushSubscriptionRepository(db),
-		pg.NewNotificationRepository(db),
 		slog.Default(),
 		"https://example.com",
 		auth.NewCheckinTokenIssuer("test-secret"),
@@ -123,11 +119,11 @@ func insertNotificationLog(ctx context.Context, userID, siteID string, sentAt ti
 }
 
 func cleanupUser(ctx context.Context, userID string) {
-	// usersへのON DELETE CASCADEで関連行(sites, check_ins, notification_settings, notification_logs, push_subscriptions)も削除される。
+	// usersへのON DELETE CASCADEで関連行(sites, check_ins, notification_settings, notification_logs)も削除される。
 	_, _ = db.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, userID)
 }
 
-// setPushPreferences はテスト用にpush_enabled/disable_email_when_push_availableを更新する。
+// setPushPreferences はPush廃止前に保存された設定(push_enabled/disable_email_when_push_available)を再現する。
 func setPushPreferences(ctx context.Context, userID string, pushEnabled, disableEmailWhenPushAvailable bool) {
 	_, err := db.ExecContext(ctx, `
 		UPDATE notification_settings
@@ -135,17 +131,6 @@ func setPushPreferences(ctx context.Context, userID string, pushEnabled, disable
 		WHERE user_id = $1
 	`, userID, pushEnabled, disableEmailWhenPushAvailable)
 	Expect(err).NotTo(HaveOccurred())
-}
-
-// insertPushSubscription はテスト用のプッシュ購読を1件作成し、endpointを返す。
-func insertPushSubscription(ctx context.Context, userID string) string {
-	endpoint := "https://push.example.com/" + newID("endpoint")
-	_, err := db.ExecContext(ctx, `
-		INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh_key, auth_key)
-		VALUES ($1, $2, $3, $4, $5)
-	`, newID("push"), userID, endpoint, "p256dh", "auth")
-	Expect(err).NotTo(HaveOccurred())
-	return endpoint
 }
 
 var _ = Describe("短期限バッチによる期限切れ通知", func() {
@@ -177,7 +162,7 @@ var _ = Describe("短期限バッチによる期限切れ通知", func() {
 		insertCheckIn(ctx, userID, siteID, now.Add(-2*time.Hour), false) // 本チェックイン(2時間前、期限は1時間)
 
 		sender := notification.NewFakeEmailSender()
-		uc := newUsecase(sender, notification.NewFakePushSender())
+		uc := newUsecase(sender)
 
 		Expect(uc.Execute(ctx)).To(Succeed())
 
@@ -200,7 +185,7 @@ var _ = Describe("短期限バッチによる期限切れ通知", func() {
 		insertCheckIn(ctx, userID, siteID, now.Add(-2*time.Hour), true) // 初回チェックインのみ、2時間前
 
 		sender := notification.NewFakeEmailSender()
-		uc := newUsecase(sender, notification.NewFakePushSender())
+		uc := newUsecase(sender)
 
 		Expect(uc.Execute(ctx)).To(Succeed())
 
@@ -217,7 +202,7 @@ var _ = Describe("短期限バッチによる期限切れ通知", func() {
 		insertCheckIn(ctx, userID, siteID, now.Add(-1*time.Hour), false) // 1時間前、期限は24時間
 
 		sender := notification.NewFakeEmailSender()
-		uc := newUsecase(sender, notification.NewFakePushSender())
+		uc := newUsecase(sender)
 
 		Expect(uc.Execute(ctx)).To(Succeed())
 		Expect(sender.Sent).To(BeEmpty())
@@ -233,82 +218,26 @@ var _ = Describe("短期限バッチによる期限切れ通知", func() {
 		insertNotificationLog(ctx, userID, siteID, now.Add(-30*time.Minute))
 
 		sender := notification.NewFakeEmailSender()
-		uc := newUsecase(sender, notification.NewFakePushSender())
+		uc := newUsecase(sender)
 
 		Expect(uc.Execute(ctx)).To(Succeed())
 		Expect(sender.Sent).To(BeEmpty())
 	})
 
-	It("有効なプッシュ購読がある場合、プッシュのみ送信されメールは抑制される", func() {
+	It("Push廃止前にメール抑制の設定だったユーザーにも、メールが送信される", func() {
 		userID = createTestUser(ctx, true)
 		siteID := createTestSite(ctx, userID, 1)
 		setPushPreferences(ctx, userID, true, true)
-		insertPushSubscription(ctx, userID)
 
 		now := time.Now()
 		insertCheckIn(ctx, userID, siteID, now.Add(-3*time.Hour), true)
 		insertCheckIn(ctx, userID, siteID, now.Add(-2*time.Hour), false)
 
 		sender := notification.NewFakeEmailSender()
-		pushSender := notification.NewFakePushSender()
-		uc := newUsecase(sender, pushSender)
+		uc := newUsecase(sender)
 
 		Expect(uc.Execute(ctx)).To(Succeed())
 
-		Expect(pushSender.Sent).To(HaveLen(1))
-		Expect(sender.Sent).To(BeEmpty())
-	})
-
-	It("disableEmailWhenPushAvailableがfalseの場合、プッシュとメールの両方が送信される", func() {
-		userID = createTestUser(ctx, true)
-		siteID := createTestSite(ctx, userID, 1)
-		setPushPreferences(ctx, userID, true, false)
-		insertPushSubscription(ctx, userID)
-
-		now := time.Now()
-		insertCheckIn(ctx, userID, siteID, now.Add(-3*time.Hour), true)
-		insertCheckIn(ctx, userID, siteID, now.Add(-2*time.Hour), false)
-
-		sender := notification.NewFakeEmailSender()
-		pushSender := notification.NewFakePushSender()
-		uc := newUsecase(sender, pushSender)
-
-		Expect(uc.Execute(ctx)).To(Succeed())
-
-		Expect(pushSender.Sent).To(HaveLen(1))
 		Expect(sender.Sent).To(HaveLen(1))
-	})
-
-	It("プッシュ購読が失効(410)している場合、購読を削除しメールにフォールバックする", func() {
-		userID = createTestUser(ctx, true)
-		siteID := createTestSite(ctx, userID, 1)
-		setPushPreferences(ctx, userID, true, true)
-		endpoint := insertPushSubscription(ctx, userID)
-
-		now := time.Now()
-		insertCheckIn(ctx, userID, siteID, now.Add(-3*time.Hour), true)
-		insertCheckIn(ctx, userID, siteID, now.Add(-2*time.Hour), false)
-
-		sender := notification.NewFakeEmailSender()
-		pushSender := notification.NewFakePushSender()
-		pushSender.GoneEndpoints[endpoint] = true
-		uc := newUsecase(sender, pushSender)
-
-		Expect(uc.Execute(ctx)).To(Succeed())
-
-		Expect(pushSender.Sent).To(BeEmpty())
-		Expect(sender.Sent).To(HaveLen(1))
-
-		var subCount int
-		Expect(db.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM push_subscriptions WHERE endpoint = $1`, endpoint,
-		).Scan(&subCount)).To(Succeed())
-		Expect(subCount).To(Equal(0))
-
-		var pushEnabled bool
-		Expect(db.QueryRowContext(ctx,
-			`SELECT push_enabled FROM notification_settings WHERE user_id = $1`, userID,
-		).Scan(&pushEnabled)).To(Succeed())
-		Expect(pushEnabled).To(BeFalse())
 	})
 })
