@@ -177,6 +177,7 @@ docker compose exec -T db psql -U postgres memorytracker -v email=you@example.co
 | `SESSION_SECRET` | 必須 | 開発用とは別の強いランダム値（例: `openssl rand -hex 32`）。チェックインリンクの署名鍵も兼ねる。未設定だと起動に失敗する |
 | `RESEND_API_KEY` | 任意 | 未設定ならメール通知は無効 |
 | `EMAIL_FROM_ADDRESS` / `EMAIL_FROM_NAME` | 任意 | 認証済み独自ドメインのアドレス / 表示名 |
+| `GATE_API_BASE_URL` | 任意 | ゲート（Androidアプリ）がAPIを呼ぶベースURL。QRコードに埋め込まれる。省略時は`FRONTEND_URL`（Vercelのrewriteで`/api/*`がバックエンドに届くため、本番では通常設定不要） |
 
 `LINE_*`と`STRIPE_*`は未実装のため設定不要です。
 

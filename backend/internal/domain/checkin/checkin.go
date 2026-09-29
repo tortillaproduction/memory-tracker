@@ -61,6 +61,9 @@ func (c *CheckIn) IsInitial() bool      { return c.isInitial }
 
 type Repository interface {
 	Save(ctx context.Context, c *CheckIn) error
+	// SaveUnlessRecent は、同じサイトにwindow以内の(非initialの)チェックインが無い場合だけ保存する。
+	// 保存した場合はtrueを返す。連打やリトライによる二重記録を防ぐために使う。
+	SaveUnlessRecent(ctx context.Context, c *CheckIn, window time.Duration) (bool, error)
 	FindLatestBySiteID(ctx context.Context, siteID site.ID) (*CheckIn, error)
 	FindAllByUserID(ctx context.Context, userID user.ID, since time.Time) ([]*CheckIn, error)
 	FindAllBySiteID(ctx context.Context, siteID site.ID) ([]*CheckIn, error)

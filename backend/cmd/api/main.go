@@ -23,11 +23,16 @@ import (
 	httpinterface "github.com/tortillaproduction/memory-tracker/internal/interface/http"
 	"github.com/tortillaproduction/memory-tracker/internal/interface/http/handler"
 	usecaseauth "github.com/tortillaproduction/memory-tracker/internal/usecase/auth"
+	"github.com/tortillaproduction/memory-tracker/internal/usecase/authenticate_gate_token"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/checkin_site"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/delete_site"
+	"github.com/tortillaproduction/memory-tracker/internal/usecase/dismiss_gate"
+	"github.com/tortillaproduction/memory-tracker/internal/usecase/get_gate_candidates"
+	"github.com/tortillaproduction/memory-tracker/internal/usecase/issue_gate_token"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/list_sites"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/notify_overdue_sites"
 	"github.com/tortillaproduction/memory-tracker/internal/usecase/register_site"
+	"github.com/tortillaproduction/memory-tracker/internal/usecase/update_notification_mode"
 )
 
 func main() {
@@ -87,6 +92,9 @@ func main() {
 	checkinRepo := pg.NewCheckInRepository(db)
 	idGen := pg.NewULIDGenerator()
 	notificationRepo := pg.NewNotificationRepository(db)
+	overdueFinder := pg.NewOverdueSiteQuery(db)
+	gateTokenRepo := pg.NewGateTokenRepository(db)
+	gateDismissalRepo := pg.NewGateDismissalRepository(db)
 
 	sessionStore := infraauth.NewSessionStore(db)
 	checkinTokenIssuer := infraauth.NewCheckinTokenIssuer(sessionSecret)
@@ -103,6 +111,25 @@ func main() {
 	googleLoginUC := usecaseauth.NewUsecase(userRepo, notificationRepo, idGen)
 
 	authHandler := handler.NewAuthHandler(googleClient, sessionStore, googleLoginUC, userRepo, frontendURL, logger)
+
+	// --- ゲート(Androidアプリ) ---
+	// GATE_API_BASE_URLはアプリがAPIを呼ぶベースURLで、QRコードに埋め込む。本番ではVercelの
+	// rewriteで/api/*がバックエンドに転送されるため、省略時はFRONTEND_URLを使う。
+	gateAPIBaseURL, err := normalizeFrontendURL(getEnvOrDefault("GATE_API_BASE_URL", frontendURL))
+	if err != nil {
+		logger.Error("invalid GATE_API_BASE_URL", "error", err)
+		os.Exit(1)
+	}
+	gateHandler := handler.NewGateHandler(
+		get_gate_candidates.NewUsecase(overdueFinder, checkinRepo, gateDismissalRepo),
+		checkinSiteUC,
+		dismiss_gate.NewUsecase(gateDismissalRepo, idGen),
+		issue_gate_token.NewUsecase(gateTokenRepo, infraauth.NewGateTokenGenerator(), idGen),
+		gateAPIBaseURL,
+		logger,
+	)
+	gateAuthenticator := authenticate_gate_token.NewUsecase(gateTokenRepo, infraauth.HashGateToken)
+	notificationSettingsHandler := handler.NewNotificationSettingsHandler(update_notification_mode.NewUsecase(notificationRepo), logger)
 
 	// --- 通知バッチのセットアップ ---
 	// RESEND_API_KEYが設定されていない場合はメール送信をno-opにする。
@@ -122,7 +149,7 @@ func main() {
 		emailSender = notification.NewNoopEmailSender()
 	}
 
-	notifyUC := notify_overdue_sites.NewUsecase(db, emailSender, logger, frontendURL, checkinTokenIssuer)
+	notifyUC := notify_overdue_sites.NewUsecase(db, overdueFinder, emailSender, logger, frontendURL, checkinTokenIssuer)
 	scheduler := batch.NewNotificationScheduler(notifyUC, notificationInterval(logger), logger)
 	schedulerDone := scheduler.Start(ctx)
 
@@ -132,6 +159,9 @@ func main() {
 		DeleteSiteUsecase:    deleteSiteUC,
 		CheckinSiteUsecase:   checkinSiteUC,
 		AuthHandler:          authHandler,
+		GateHandler:          gateHandler,
+		NotificationSettings: notificationSettingsHandler,
+		GateAuthenticator:    gateAuthenticator,
 		SessionStore:         sessionStore,
 		CheckinTokenVerifier: checkinTokenIssuer,
 		FrontendURL:          frontendURL,
