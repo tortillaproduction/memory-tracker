@@ -186,6 +186,7 @@ docker compose exec -T db psql -U postgres memorytracker -v email=you@example.co
 | 変数 | 設定値 |
 |---|---|
 | `VITE_API_BASE_URL` | **設定しない**（上記の理由。ローカル開発時のみ既定で`http://localhost:8080`が使われる） |
+| `VITE_GATE_GUIDE_URL` | 任意。ゲート（Androidアプリ）のセットアップ手順書のURL。設定するとWebのゲート設定画面にリンクを表示する |
 
 ### 手順
 
