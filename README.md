@@ -9,7 +9,7 @@
 - **DB**: PostgreSQL
 - **API**: REST（gRPCは今回のスコープではオーバースペックのため見送り）
 - **認証**: Google OAuth + Cookieベースセッション
-- **通知**: メール（Resend）、ブラウザ通知（Web Push、PWAインストール時）、LINE（Phase 2、UI上は現状トグルをグレーアウト）
+- **通知**: メール（Resend）、LINE（Phase 2、未実装）
 - **PWA**: `vite-plugin-pwa`（Service Worker、installable manifest）
 
 ## ディレクトリ構成
@@ -110,46 +110,17 @@ EMAIL_FROM_NAME=Memory Tracker
     ↓
 ユーザーごとにまとめて通知（複数サイトが期限切れでも1回にまとめる）
     ↓
-有効なプッシュ購読があればプッシュを優先、無ければ（または設定次第で）メールを送信
+メールを送信
     ↓
 notification_logsに記録（二重送信防止）
 ```
 
-## ブラウザ通知（Web Push / PWA）の設定
-
-アプリをホーム画面にインストール（PWA化）すると、期限切れサイトの通知をブラウザ通知（Web Push）で受け取れます。
-
-**通知チャネルの自動切替（二重通知の防止）**
-
-ナビバーのユーザーアイコン→ドロップダウンメニューの「Notifications」に、Email/Pushを切り替える1本のスライドトグルがあります（`frontend/src/App.tsx`、状態管理は`frontend/src/hooks/usePushSubscription.ts`）。トグルをPush側にするとその場でプッシュ購読を作成し、Email側に戻すと購読を解除します。ブラウザがPush APIに対応していない場合（PWAとしてインストールするまでプッシュが使えないiOS Safari等）はトグルが無効化され、ツールチップで案内されます。
-
-- 有効なプッシュ購読があれば、その端末にはプッシュ通知のみを送信し、メールは送りません（デフォルト）。トグルはEmail/Pushのどちらか一方を選ぶ形なので、通常は両方同時に届くことはありません。
-- プッシュの購読が失効している場合（ブラウザ側で通知を許可解除した場合など）は、送信時に自動検知して購読情報を削除し、同じタイミングでメール通知にフォールバックします（手動での切り戻し操作は不要）。
-- バックエンドには「プッシュが使える場合でもメールを両方送る」設定（`disableEmailWhenPushAvailable`、`PATCH /api/notification-preferences`）が残っていますが、現在のUIからは変更できず、常にデフォルト値（メールは止める）のまま使われます。
-
-**VAPID鍵の設定**
-
-Web Pushの送信にはVAPID（Voluntary Application Server Identification）鍵ペアが必要です。
-
-1. VAPID鍵ペアを生成する（`webpush-go`同梱のCLIか、[web-push](https://www.npmjs.com/package/web-push)などのツールを利用）
-2. `.env`に設定する
-
-```env
-VAPID_PUBLIC_KEY=xxxxxxxxxxxx
-VAPID_PRIVATE_KEY=xxxxxxxxxxxx
-VAPID_SUBJECT=mailto:support@example.com
-```
-
-**`VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`が未設定の場合**: プッシュ送信は自動的に無効化され、購読・設定APIやメール通知バッチは通常通り動作します（開発時は鍵なしで起動できます）。
-
-**ローカルでのプッシュ通知確認**: `localhost`はセキュアコンテキストとして扱われるため、ブラウザでの購読からバックエンドからの実際のプッシュ送信まで、トンネルなしでローカル完結して確認できます。インストールプロンプトのスマートフォン実機確認にはHTTPSが必要なため、Vercelのプレビューデプロイ等を利用してください。
-
-**開発中に期限切れ通知をブラウザで確認する**
+### 開発中の通知確認
 
 通知バッチはデフォルト5分間隔のため、開発中は次の手順で確認します。
 
 1. `.env`に`NOTIFICATION_INTERVAL=1m`を追加して`docker compose up -d --build app`（バッチ間隔を1分に短縮。省略時は5分。appはイメージをビルドして動かしているため、`.env`やコードを変えたら再ビルドが必要です。起動ログの`notification scheduler started`の`interval`が`60000000000`なら反映されています）
-2. `http://localhost:5173`でログインし、Notificationsのトグルを**Push**にして通知を許可する（プッシュ購読はブラウザ固有のため、SQLでは作れません）
+2. `http://localhost:5173`でログインする（`RESEND_API_KEY`を設定し、`EMAIL_FROM_ADDRESS`が`onboarding@resend.dev`のままなら、Resendに登録した自分のアドレスでログインする）
 3. 期限切れサイトを投入する（`you@example.com`はログインに使ったアドレス）
 
 ```bash
@@ -157,13 +128,15 @@ docker compose exec -T db psql -U postgres memorytracker -v email=you@example.co
   < backend/scripts/dev_seed_overdue.sql
 ```
 
-4. 最大1分待つと、期限切れの2サイト分の通知が届きます（期限内のサイトは通知されません）。もう一度確認したいときは手順3のSQLを再実行してください（通知ログが消えて再び対象になります）
-5. 通知（またはボタン）をクリックすると、チェックインが記録され、登録したサイトのURLへ移動します。開発時も`/go/*`はViteのプロキシ（`frontend/vite.config.ts`）でバックエンドへ転送されます（本番の`frontend/vercel.json`のrewriteと同じ挙動）
+4. 最大1分待つと、期限切れの2サイト分をまとめたメールが1通届きます（期限内のサイトは通知されません。appのログに`notification sent`が出ます）。もう一度確認したいときは手順3のSQLを再実行してください（通知ログが消えて再び対象になります）
+5. メール内のボタン（またはリンク）をクリックすると、チェックインが記録され、登録したサイトのURLへ移動します。開発時も`/go/*`はViteのプロキシ（`frontend/vite.config.ts`）でバックエンドへ転送されます（本番の`frontend/vercel.json`のrewriteと同じ挙動）
 6. 終わったら`docker compose exec -T db psql -U postgres memorytracker < backend/scripts/dev_seed_cleanup.sql`でシードを削除します
 
-**通知が届く条件・表示のされ方（タブを閉じた場合、PWAの場合など）**: [docs/push-notification-spec.md](docs/push-notification-spec.md)を参照してください。
-
 **通知の運用（失敗時のリトライ、届かないときのログの見方）**: [docs/notification-operations.md](docs/notification-operations.md)を参照してください。
+
+## PWA
+
+`vite-plugin-pwa`でmanifestとService Workerを用意しており、スマホのホーム画面やデスクトップにアプリとしてインストールできます。Service Workerはインストール要件を満たすためだけに使い、オフラインキャッシュやプッシュ通知は行いません。インストールプロンプトのスマートフォン実機確認にはHTTPSが必要なため、Vercelのプレビューデプロイ等を利用してください。
 
 ## 本番デプロイ
 
@@ -204,8 +177,6 @@ docker compose exec -T db psql -U postgres memorytracker -v email=you@example.co
 | `SESSION_SECRET` | 必須 | 開発用とは別の強いランダム値（例: `openssl rand -hex 32`）。チェックインリンクの署名鍵も兼ねる。未設定だと起動に失敗する |
 | `RESEND_API_KEY` | 任意 | 未設定ならメール通知は無効 |
 | `EMAIL_FROM_ADDRESS` / `EMAIL_FROM_NAME` | 任意 | 認証済み独自ドメインのアドレス / 表示名 |
-| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | 任意 | 本番用に新規生成した鍵ペア。未設定ならブラウザ通知は無効 |
-| `VAPID_SUBJECT` | 任意 | `mailto:<連絡先メールアドレス>` |
 
 `LINE_*`と`STRIPE_*`は未実装のため設定不要です。
 
@@ -224,14 +195,10 @@ docker compose exec -T db psql -U postgres memorytracker -v email=you@example.co
 1. Neonでプロジェクトを作成する
 2. ダッシュボードの Connection string で「Pooled connection」のトグルを**オフ**にし、direct接続の文字列（`postgres://...neon.tech/...?sslmode=require`）を控える → `DATABASE_URL`（pooled接続文字列にはホスト名に`-pooler`が付く。バックエンドはPgBouncer transaction poolingと相性が悪いため、こちらは使わない）
 
-#### 2. VAPID鍵・SESSION_SECRETを生成する（ローカル）
+#### 2. SESSION_SECRETを生成する（ローカル）
 
 ```bash
-# SESSION_SECRET
 openssl rand -hex 32
-
-# VAPID鍵ペア（ブラウザ通知を使う場合）
-npx web-push generate-vapid-keys
 ```
 
 #### 3. Render（バックエンド）
@@ -292,12 +259,12 @@ Renderの環境変数を更新し、再デプロイする。
 
 1. `https://<project>.vercel.app`を開き、Googleでログインできる
 2. サイトを登録するとダッシュボードに表示される
-3. スマホでホーム画面に追加（PWA）し、ナビバーのユーザーメニューからPushを有効にできる（VAPID鍵を設定した場合。iOSはPWAとしてインストールが必要）
+3. スマホでホーム画面に追加（PWA）できる
 
 ### 運用上の注意
 
 - **URLを変えたとき**: Vercel/RenderのURL（カスタムドメイン含む）を変更したら、`vercel.json`のrewrite先、`FRONTEND_URL`、`GOOGLE_REDIRECT_URL`、Google Cloud Consoleのリダイレクト URIをすべて揃えて更新してください。
-- **`SESSION_SECRET`を変更すると**、発行済みのチェックインリンク（メール/Push内のリンク）が無効になります。
+- **`SESSION_SECRET`を変更すると**、発行済みのチェックインリンク（メール内のリンク）が無効になります。
 
 ### CI
 
@@ -342,7 +309,7 @@ make test
 - [x] サイト一覧取得API（`GET /api/sites`）とフロントの実データ反映
 - [x] ストリーク計算・ダッシュボード表示（ユーザー全体 / サイト別）
 - [x] メール通知バッチ（Resend、5分ごとに期限切れサイトを検出・通知）
-- [x] PWA化・ブラウザ通知（Web Push、購読状況に応じてメールと自動的に切り替え）
+- [x] PWA化（ブラウザ通知（Web Push）は効果が薄いため廃止）
 - [ ] LINE通知（UIはトグル用意、実装完了までグレーアウト）
 - [ ] Stripe連携（Phase 2、`plan_type`と`subscriptions`テーブルは用意済み）
 
