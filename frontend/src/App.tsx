@@ -10,7 +10,6 @@ import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
-import { usePushSubscription } from './hooks/usePushSubscription';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
 
 // メニュー項目の先頭に付ける共通アイコン(線画SVG)。
@@ -62,7 +61,6 @@ function UserAvatar({
 function App() {
   const { user, isLoading, isAuthenticated, logout } = useAuth();
   const { showToast } = useToast();
-  const push = usePushSubscription(isAuthenticated);
   const install = useInstallPrompt();
 
   // ログイン/ログアウトはページ全体のリロードを伴うため、直前にsessionStorageへ
@@ -135,91 +133,6 @@ function App() {
                           </div>
                         </li>
 
-                        <li className="menu-title text-xs px-2.5 py-1 font-normal text-base-content">
-                          <span className="flex items-center gap-2">
-                            <MenuIcon>
-                              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-                              <path d="M10.3 21a1.9 1.9 0 0 0 3.4 0" />
-                            </MenuIcon>
-                            Notifications
-                          </span>
-                        </li>
-                        <li>
-                          <div
-                            className={`active:bg-transparent! active:text-inherit! focus:bg-transparent! ${
-                              !push.isSupported ? 'tooltip tooltip-left' : ''
-                            }`}
-                            data-tip={
-                              !push.isSupported
-                                ? 'Install the app to enable push notifications'
-                                : undefined
-                            }
-                          >
-                            <div
-                              className="flex items-center justify-center gap-3 px-2 py-1 ml-8"
-                              onMouseDown={(e) => e.preventDefault()}
-                            >
-                              <button
-                                type="button"
-                                className={`flex items-center gap-1 ${
-                                  push.channel === 'email'
-                                    ? 'font-semibold'
-                                    : 'text-base-content/50'
-                                }`}
-                                disabled={!push.isSupported}
-                                onClick={() => push.selectChannel('email')}
-                              >
-                                <MenuIcon>
-                                  <rect
-                                    x="3"
-                                    y="5"
-                                    width="18"
-                                    height="14"
-                                    rx="2"
-                                  />
-                                  <path d="m3 7 9 6 9-6" />
-                                </MenuIcon>
-                                Email
-                              </button>
-                              {/* 無効時も丸(つまみ)を塗りつぶして表示し、選択側へ寄せる */}
-                              <input
-                                type="checkbox"
-                                className="toggle toggle-sm toggle-primary [--input-color:var(--color-primary)] disabled:before:bg-primary"
-                                checked={push.channel === 'push'}
-                                disabled={!push.isSupported}
-                                onChange={(e) =>
-                                  push.selectChannel(
-                                    e.target.checked ? 'push' : 'email',
-                                  )
-                                }
-                              />
-                              <button
-                                type="button"
-                                className={`flex items-center gap-1 ${
-                                  push.channel === 'push'
-                                    ? 'font-semibold'
-                                    : 'text-base-content/50'
-                                }`}
-                                disabled={!push.isSupported}
-                                onClick={() => push.selectChannel('push')}
-                              >
-                                <MenuIcon>
-                                  <rect
-                                    x="7"
-                                    y="2"
-                                    width="10"
-                                    height="20"
-                                    rx="2"
-                                  />
-                                  <path d="M11 18h2" />
-                                </MenuIcon>
-                                Push
-                              </button>
-                            </div>
-                          </div>
-                        </li>
-
-                        <div className="my-2 h-px bg-base-content/10"></div>
                         <li className="menu-title text-xs px-2.5 py-1 font-normal text-base-content">
                           <span className="flex items-center gap-2">
                             <MenuIcon>

@@ -17,15 +17,14 @@ export default defineConfig({
       srcDir: 'src',
       filename: 'sw.ts',
       registerType: 'autoUpdate',
-      // 開発サーバーでもService Workerを登録する。無効だとnavigator.serviceWorker.readyが
-      // 永遠に解決されず、プッシュの購読/解除が開発時に動かない。
+      // 開発サーバーでもService Workerを登録し、PWAのインストールを開発時にも確認できるようにする。
       devOptions: {
         enabled: true,
         type: 'module',
       },
       injectManifest: {
-        // アプリシェルのオフラインキャッシュは不要(push/notificationclickのみ自前実装)なので、
-        // プリキャッシュ対象を空にして純粋なメッセージング用Service Workerとして使う。
+        // アプリシェルのオフラインキャッシュは不要なので、プリキャッシュ対象を空にし、
+        // Service WorkerはPWAのインストール要件を満たすためだけに使う。
         globPatterns: [],
       },
       manifest: {
@@ -78,7 +77,7 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
-    // 通知(Push/メール)のチェックインリンクは FRONTEND_URL + /go/{siteId}?token=... で、
+    // メール通知のチェックインリンクは FRONTEND_URL + /go/{siteId}?token=... で、
     // 本番ではfrontend/vercel.jsonのrewriteでバックエンドへ転送される。開発でも同じ挙動にしないと、
     // ViteがSPAのindex.htmlを返してしまい、リンクを開いてもアプリが表示されるだけになる。
     proxy: {

@@ -9,7 +9,7 @@ function buildBookmarklet(origin: string): string {
   );
 }
 
-// ドラッグしてブックマークバーに置いてもらうためのリンク。Push/Emailトグルと同じ文字スタイルにする。
+// ドラッグしてブックマークバーに置いてもらうためのリンク。
 export default function BookmarkletLink() {
   return (
     <a
