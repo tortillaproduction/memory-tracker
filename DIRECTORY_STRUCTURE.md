@@ -121,8 +121,22 @@ memory-tracker/
 │   ├── .prettierrc.json
 │   └── Dockerfile
 │
+├── android/                          # ゲート（Androidアプリ、Kotlin + Jetpack Compose）
+│   ├── build.sh                      # Dockerでのビルド（APK + 単体テスト）
+│   └── app/src/
+│       ├── main/java/.../gate/
+│       │   ├── policy/               # Androidに依存しない判定ロジック（除外リスト・発動制限など）
+│       │   ├── api/                  # APIクライアント（タイムアウト2秒）とセットアップコード
+│       │   ├── ui/                   # ゲート画面・セットアップ・設定画面（Compose）
+│       │   ├── GateAccessibilityService.kt  # 前面アプリの検知
+│       │   └── GateLauncher.kt       # ゲートの起動と自動終了のタイマー
+│       ├── debug/                    # デバッグビルドのみ平文HTTPを許可
+│       └── test/                     # JVMの単体テスト
+│
 ├── docs/
-│   └── notification-operations.md    # 通知の運用(リトライ・ログ・切り分け)
+│   ├── notification-operations.md    # 通知の運用(リトライ・ログ・切り分け)
+│   ├── gate-setup.md                 # ゲートのセットアップ手順（使う人向け）
+│   └── gate-device-testing.md        # ゲートの実機での動作確認手順
 │
 ├── docker-compose.yml                # 開発用: backend / frontend / db をまとめて起動
 ├── docker-compose.prod.yml           # 本番用
