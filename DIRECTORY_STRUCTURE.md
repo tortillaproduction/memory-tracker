@@ -87,7 +87,7 @@ memory-tracker/
 │   │           │   └── gate_token_middleware.go # Authorization: Bearer 認証
 │   │           └── router.go
 │   │
-│   ├── migrations/                   # golang-migrate用SQL（up/downのペア、0001〜0008）
+│   ├── migrations/                   # golang-migrate用SQL（up/downのペア、0001〜0009）
 │   │
 │   ├── go.mod
 │   ├── go.sum

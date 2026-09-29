@@ -125,16 +125,6 @@ func cleanupUser(ctx context.Context, userID string) {
 	_, _ = db.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, userID)
 }
 
-// setPushPreferences はPush廃止前に保存された設定(push_enabled/disable_email_when_push_available)を再現する。
-func setPushPreferences(ctx context.Context, userID string, pushEnabled, disableEmailWhenPushAvailable bool) {
-	_, err := db.ExecContext(ctx, `
-		UPDATE notification_settings
-		SET push_enabled = $2, disable_email_when_push_available = $3
-		WHERE user_id = $1
-	`, userID, pushEnabled, disableEmailWhenPushAvailable)
-	Expect(err).NotTo(HaveOccurred())
-}
-
 // sentTo はテスト対象ユーザー宛てのメールだけを返す。通知バッチはDB上の全ユーザーを処理するため、
 // 他のテストパッケージが並行して作ったユーザー宛てのメールを除外する。
 func sentTo(sender *notification.FakeEmailSender, userID string) []notification.SentEmail {
@@ -247,23 +237,6 @@ var _ = Describe("短期限バッチによる期限切れ通知", func() {
 
 		Expect(uc.Execute(ctx)).To(Succeed())
 		Expect(sentTo(sender, userID)).To(BeEmpty())
-	})
-
-	It("Push廃止前にメール抑制の設定だったユーザーにも、メールが送信される", func() {
-		userID = createTestUser(ctx, true)
-		siteID := createTestSite(ctx, userID, 1)
-		setPushPreferences(ctx, userID, true, true)
-
-		now := time.Now()
-		insertCheckIn(ctx, userID, siteID, now.Add(-3*time.Hour), true)
-		insertCheckIn(ctx, userID, siteID, now.Add(-2*time.Hour), false)
-
-		sender := notification.NewFakeEmailSender()
-		uc := newUsecase(sender)
-
-		Expect(uc.Execute(ctx)).To(Succeed())
-
-		Expect(sentTo(sender, userID)).To(HaveLen(1))
 	})
 
 	Describe("通知モードによる分岐", func() {
